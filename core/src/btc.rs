@@ -402,6 +402,31 @@ pub fn xpub_to_address_js(
     xpub_to_address(xpub, network, chain, index).map_err(|e| JsError::new(&e.to_string()))
 }
 
+/// Reverse of entropy_to_mnemonic, for wallet restore: validates the words
+/// (checksum included) and returns the original 32 entropy bytes. Only
+/// 24-word mnemonics are accepted — same policy as generation.
+pub fn mnemonic_to_entropy(mnemonic: &str) -> Result<[u8; MNEMONIC_ENTROPY_LEN], BtcError> {
+    let parsed = Mnemonic::parse_in_normalized(Language::English, mnemonic)
+        .map_err(|_| BtcError::InvalidMnemonic)?;
+    if parsed.word_count() != 24 {
+        return Err(BtcError::InvalidMnemonic);
+    }
+    let (bytes, len) = parsed.to_entropy_array();
+    if len != MNEMONIC_ENTROPY_LEN {
+        return Err(BtcError::InvalidMnemonic);
+    }
+    let mut out = [0u8; MNEMONIC_ENTROPY_LEN];
+    out.copy_from_slice(&bytes[..MNEMONIC_ENTROPY_LEN]);
+    Ok(out)
+}
+
+#[wasm_bindgen]
+pub fn mnemonic_to_entropy_js(mnemonic: &str) -> Result<Vec<u8>, JsError> {
+    mnemonic_to_entropy(mnemonic)
+        .map(|bytes| bytes.to_vec())
+        .map_err(|e| JsError::new(&e.to_string()))
+}
+
 #[wasm_bindgen]
 pub fn entropy_to_mnemonic_js(entropy: &[u8]) -> Result<String, JsError> {
     entropy_to_mnemonic(entropy)
@@ -590,6 +615,35 @@ mod tests {
         assert_eq!(
             xpub_to_address(&xpub, "mainnet", 0, 0x8000_0000),
             Err(BtcError::InvalidAddressIndex)
+        );
+    }
+
+    #[test]
+    fn mnemonic_round_trips_back_to_its_entropy() {
+        assert_eq!(
+            mnemonic_to_entropy(ZERO_ENTROPY_MNEMONIC).unwrap(),
+            [0u8; 32]
+        );
+        let entropy: [u8; 32] = core::array::from_fn(|i| (i * 3 + 1) as u8);
+        let words = entropy_to_mnemonic(&entropy).unwrap().to_string();
+        assert_eq!(mnemonic_to_entropy(&words).unwrap(), entropy);
+    }
+
+    #[test]
+    fn restore_refuses_non_24_word_and_invalid_mnemonics() {
+        // Valid 12-word BIP39, still refused: only 24-word seeds exist here.
+        assert_eq!(
+            mnemonic_to_entropy(BIP84_MNEMONIC),
+            Err(BtcError::InvalidMnemonic)
+        );
+        assert_eq!(
+            mnemonic_to_entropy("abandon abandon zebra"),
+            Err(BtcError::InvalidMnemonic)
+        );
+        let bad_checksum = format!("{} abandon", &ZERO_ENTROPY_MNEMONIC[..ZERO_ENTROPY_MNEMONIC.len() - 4]);
+        assert_eq!(
+            mnemonic_to_entropy(&bad_checksum),
+            Err(BtcError::InvalidMnemonic)
         );
     }
 

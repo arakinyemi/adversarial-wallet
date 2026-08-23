@@ -5,3 +5,4 @@ dist/
 # Never commit compiled artifacts; the adversary audits source.
 core/pkg/
 core/target/
+.gstack/

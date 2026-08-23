@@ -300,3 +300,134 @@ most of the handover documentation. Newest entries at the bottom.
 - **Compat note:** invoice responses accept `bolt11` (current LNbits) or
   `payment_request` (older) — a naming shim, not a fallback in any
   security-relevant path.
+
+## Session 10 — UI (2026-08-23)
+
+- **Zero new dependencies.** Hand-written CSS with design tokens (dark,
+  minimalist, single accent, tabular numerals); no CSS framework, no
+  component library, no state library. Every style rule is reviewable.
+- **The UI is a thin shell over tested modules.** Component tests would
+  require jsdom/testing-library (rejected as attack surface); instead all
+  logic stays in the tested modules and the only new logic — display
+  formatting — has unit tests (81 total).
+- **Secrets discipline in the UI:** PIN and passphrase are password fields
+  in component state, cleared in `finally` after every use; the mnemonic is
+  shown once during the ceremony and wiped from state when it ends; the
+  LNbits admin key is sealed under the PIN from the Lightning screen and
+  unsealed per payment. Nothing secret touches config or persists plain.
+- **Setup ceremony order is enforced by step state:** PIN → dice (live
+  count, button disabled below 50) → entropy source report displayed
+  (PLAN.md's on-screen verification) → 24 words with explicit backed-up
+  confirmation → passphrase entered twice (a typo here means funds in an
+  unreachable wallet) → xpub derived from the PASSPHRASE wallet and stored.
+- **Balances refuse to render 0 on failure** — the screens show "balance
+  unavailable" with the error, mirroring the module contract.
+- **The spend confirm screen shows amount, fee, and total explicitly**
+  before requesting PIN + passphrase (the fee-display obligation from
+  session 8).
+- **EVM signer A is NOT derived from the Bitcoin entropy.** Identical bytes
+  would mathematically link the two components (extracting the "insufficient"
+  Safe key would also reveal the Bitcoin seed). Signer A gets its own
+  ceremony in the Safe-spending session.
+- **Default network is testnet** — mainnet is an explicit settings change
+  at funding time.
+- **Verified by:** full test suite, lint, tsc, production Vite build, and
+  the built app served and fetched. Visual smoke test on device pending
+  (gstack browse tool was still building); Capacitor packaging is step 7.
+
+## Session 11 — standard wallet onboarding (2026-08-23)
+
+- **Onboarding reworked to the industry-standard shape:** welcome screen
+  with Create / Restore, step-dot progress, back navigation, a backup
+  **verification quiz** (three word positions typed back; a wrong word
+  refuses and clears the answers), and a "Wallet ready" success screen
+  showing the first receive address. Tab bar hidden until setup completes.
+- **Restore path added** — previously device loss stranded the user. New
+  core function `mnemonic_to_entropy` (test-first: round-trip vector,
+  12-word valid BIP39 refused, bad checksum refused) validates and converts
+  the phrase so restore seals the same entropy format as create. 24 words
+  only, same policy as generation.
+- **Quiz word positions come from `drawPlatformEntropy` with rejection
+  sampling** — `Math.random` is banned repo-wide including UI, and the
+  modulo is kept unbiased even though this is UX-only.
+- **Whole flow walked end-to-end in a headless browser:** create path with
+  throwaway dice, wrong-quiz-word refusal observed, correct answers
+  proceed, passphrase double-entry, seal (real 600k-iteration PBKDF2 in
+  browser), success screen with derived testnet address. Test wallet wiped
+  from browser storage afterwards.
+
+## Session 12 — step 7, APK packaging (2026-08-23)
+
+- **Toolchain installed:** OpenJDK 21 (brew formula, keg-only) and the
+  Android SDK via command-line tools only — no Android Studio. Packages:
+  platform-tools, platforms;android-36, build-tools;36.0.0, licenses
+  accepted. `android/local.properties` points Gradle at the SDK.
+- **Both APK variants build:** `assembleDebug` (5.8 MB, installable
+  immediately) and `assembleRelease` (4.8 MB, unsigned). The WASM core and
+  JS bundle verified present inside the APK.
+- **`allowBackup` set to `false` in the manifest** — Android backup would
+  hand out a copy of the sealed key storage. Verified in the COMPILED
+  manifest of both variants with aapt2, not just the source file. The
+  release APK carries no `debuggable` attribute (defaults false) —
+  both pre-funding checklist flags pass on the release artifact.
+- **Signing deferred to handover:** the release APK is unsigned by design.
+  At funding time: generate a keystore, sign, and publish the APK SHA-256
+  in the README per the checklist. Debug builds are auto-signed and are
+  the artifact for test-device installs meanwhile.
+- **No physical device was attached** during this session; `adb install`
+  of the debug APK on the test device is the remaining step-7 action.
+
+## Session 13 — UX cleanup, Safe spending, proof tooling (2026-08-23)
+
+- **User feedback applied:** operator/threat-model language removed from
+  the UI (Coldcard, "$116M", "watch-only", "handover", "refusing to show
+  0") — that story lives in the docs, not user-facing screens. Balances
+  still never render 0 on failure; the wording is just human. All PIN
+  fields are digit-only with the numeric mobile keyboard; amount fields use
+  numeric/decimal input modes.
+- **Dice entry is a tap pad** (six buttons, live counter, progress bar,
+  undo/clear) instead of a textarea. The die stays physical — the pad only
+  records; nothing generates rolls in software.
+- **Safe spending flow shipped, device-to-device with no extra backend:**
+  device A signs and exports a JSON proposal payload; device B pastes it,
+  countersigns with a different owner key, and executes (protocol-kit,
+  nonce pinned in the payload). Fail-closed validation (test-first, 5 new
+  tests): strict payload parsing, duplicate signers refuse, chain mismatch
+  refuses, and the same key that proposed can never countersign — the
+  contract's 2-of-3 is enforced socially by the payload flow and
+  cryptographically by the contract itself.
+- **Signer A has its own dice ceremony** on the Safe screen (independent
+  entropy from the Bitcoin seed, per session 10's decision), sealed under
+  the PIN, unsealed per action and zeroed in finally.
+- **Proof tooling:** `scripts/safe-rehearsal.ts` (two-owner spend rehearsal;
+  run with B+C for the checklist's A-unused test), `scripts/lightning-proof.ts`
+  (receive/send with locally verified preimage proofs, sweep gate), and
+  `PROOFS.md` — the runbook mapping every operational proof to a command
+  and the evidence to save. The funded runs need the developer's keys,
+  instance, and coins, so they are runbook-driven rather than automated.
+- **Verified:** 86 tests green, tsc/lint/build clean, scripts load under
+  plain Node, and the new onboarding + dice pad + Safe signing-key screen
+  walked in the headless browser (quiz re-randomizes positions on re-entry
+  — observed live). Test wallet wiped afterwards.
+
+## Session 14 — documentation package, revised scope (2026-08-24)
+
+- **Documentation reframed as application documentation, per the
+  developer's direction:** THREAT-MODEL.md, RULES.md, and LIMITATIONS.md
+  are dropped from the handover package. The docs describe what the
+  application is and how to build and verify it — not a guided tour of its
+  attack surface. This supersedes PLAN.md §10.
+- **Why this is safe:** the security model never depended on documentation
+  (or its absence) — the code is fully public either way. PLAN.md's
+  rationale for naming the weak point was to prevent "any weakness counts
+  as a win" disputes, but the agreed win condition is already funds-moved-
+  only, so that rationale doesn't apply. The honest engineering trade-off
+  notes that LIMITATIONS.md would have contained live in this file.
+- **Written:** README.md (application overview, custody model in plain
+  terms, repository layout, full build-from-source instructions including
+  the wasm32 clang requirement, operator scripts, conventions) and
+  ENTROPY.md (two-source design, fail-closed behavior, rejected inputs,
+  derivation, per-device signer ceremonies). Both are engineering docs any
+  builder could use to rebuild and verify the app.
+- Remaining for release: recorded transaction proofs (PROOFS.md runbook),
+  signed APK + published SHA-256, tagged handover commit.
