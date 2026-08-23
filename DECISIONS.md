@@ -276,3 +276,27 @@ most of the handover documentation. Newest entries at the bottom.
 - **Broadcast success must be provable:** `broadcastTransaction` accepts
   only a well-formed txid as proof; anything else — including an HTTP 200
   with junk — throws. Esplora's rejection reason is surfaced verbatim.
+
+## Session 9 — Lightning via LNbits (2026-08-23)
+
+- **Zero new dependencies** — LNbits is a REST API over the built-in
+  `fetch`. Tests red-first (7 observed failing, then green; 77 total).
+- **Payment proof is verified, never trusted.** A payment counts as
+  settled only when the API's preimage SHA-256-hashes to the payment hash
+  (verified locally with WebCrypto against independently computed
+  vectors). An API claiming "paid" with a missing or wrong preimage
+  refuses — the recorded preimages are handover evidence, so they must be
+  cryptographically true, not reported.
+- **`assertSweptToZero` is the checklist gate** for PLAN.md's zero-resting-
+  balance requirement: it passes only on exactly 0 msat.
+- **The LNbits admin key is the named weak point, by design.** It is an
+  app-resident secret that can move Lightning funds; mitigation is
+  operational (sweep to zero before the attack window), documented rather
+  than disguised. The key is passed per call by the caller — the module
+  never stores it, and a test asserts error messages never contain it. At
+  wire-up, the key lives in the same sealed storage as signer A.
+- **Config validation refuses before any network call** (empty base URL or
+  key), and invoice amounts must be positive whole sats.
+- **Compat note:** invoice responses accept `bolt11` (current LNbits) or
+  `payment_request` (older) — a naming shim, not a fallback in any
+  security-relevant path.
