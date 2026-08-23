@@ -217,3 +217,62 @@ most of the handover documentation. Newest entries at the bottom.
   still return at step 8 as a pinned reproducible release-build recipe).
 - **Deferred to next sessions:** Esplora watch-only balance display, PSBT
   construction and passphrase-gated signing, sweep UI.
+
+## Session 7 — watch-only balance display (2026-08-23)
+
+- **Zero new dependencies.** Watch-only address derivation went into the
+  Rust core (`xpub_to_address`: public-key-only BIP32 from the account
+  xpub); chain data uses the built-in `fetch` against an Esplora endpoint.
+- **Watch-only never touches key material.** Balance display derives
+  addresses from the stored xpub alone — the encrypted seed stays sealed
+  and the passphrase is never requested for viewing. Chain 0/1 only
+  (receive/change); the xpub's own network prefix is checked against the
+  requested network and mismatches refuse.
+- **Cross-path test:** addresses derived via the xpub-only path must equal
+  the private-derivation path and the BIP84 spec vectors exactly.
+- **Tests red-first** (3 Rust + 9 TS observed failing, then green; 57
+  total).
+- **A dead endpoint must never read as "balance: 0".** Any HTTP error,
+  rejected fetch, malformed body, wrong-address response, unsafe-integer
+  amount, or spent>funded inconsistency throws; a scan either completes
+  for every address or throws — no partial sums. Standard gap limit of 20
+  per chain, activity resets the gap.
+- **Pending balance is a signed net delta** (mempool funded − spent), so an
+  in-flight outgoing spend shows as negative pending rather than being
+  hidden or clamped.
+
+## Session 8 — passphrase-gated spending (2026-08-23)
+
+- **Zero new dependencies** — transaction construction and signing come
+  entirely from the already-approved `bitcoin` crate; broadcast is a plain
+  `fetch` POST.
+- **Tests red-first:** 10 Rust + 3 TS observed failing before
+  implementation, then green (36 Rust, 63 total).
+- **The address interlock is the passphrase check.** `sign_spend` takes
+  each UTXO's address alongside its derivation path and refuses unless the
+  passphrase-derived key reproduces that exact address. A wrong passphrase
+  derives a different wallet, so without this the core would sign
+  network-invalid transactions; with it, wrong passphrase = loud refusal
+  before any signature exists. Tested.
+- **Deviation from PLAN.md's "PSBT" wording, deliberately:** the core
+  builds and signs the transaction in one step (SighashCache, RFC6979
+  deterministic ECDSA) rather than materialising a PSBT. PSBT is an
+  interchange format for multi-party signing; the Bitcoin component has
+  exactly one signer inside one WASM call, and never letting a
+  partially-signed artifact cross a boundary is strictly safer. The EVM
+  component is where multi-party signing lives.
+- **UTXO data crosses the WASM boundary as primitive arrays**
+  (newline-joined strings, Uint32Array/BigUint64Array) instead of JSON —
+  avoids adding serde_json just for parameter passing.
+- **Fail-closed spend policy:** checked arithmetic throughout (overflow
+  refuses); insufficient funds refuse; a change output below 546 sats
+  refuses rather than silently inflating the fee; zero amount or zero fee
+  refuses; recipient is network-checked; chains beyond 0/1 refuse. Change
+  derives at m/84'/coin'/0'/1/change_index. RBF signalled, version 2.
+- **Fee policy is the UI's job, not the core's:** the core enforces
+  arithmetic consistency only; a deliberate high-fee sweep must remain
+  possible, so there is no in-core "absurd fee" heuristic. The spend
+  confirmation screen must display the fee explicitly.
+- **Broadcast success must be provable:** `broadcastTransaction` accepts
+  only a well-formed txid as proof; anything else — including an HTTP 200
+  with junk — throws. Esplora's rejection reason is surfaced verbatim.
