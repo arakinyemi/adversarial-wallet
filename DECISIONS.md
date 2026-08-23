@@ -90,3 +90,97 @@ most of the handover documentation. Newest entries at the bottom.
 - **Verification UI deferred:** the module returns a source report
   (name + bytes + roll count per source) for the on-screen display PLAN.md
   requires; the screen itself lands with the seed-generation flow.
+
+## Session 3 — EVM module: Safe on Base (2026-08-23)
+
+- **New deps, approved before adding: `viem` =2.55.19 and
+  `@safe-global/protocol-kit` =8.0.6** (transitives: abitype, semver, three
+  Safe-official packages, all lockfile-pinned). The SDK was chosen over
+  viem-only Safe deployment because `safe-deployments` supplies canonical
+  contract addresses; hand-copied addresses are a subtle-error class we
+  refuse to own. No new advisories: `npm audit` still shows only the known
+  dev-only Capacitor CLI item from session 1.
+- **Tests red-first again:** 15 EVM tests written against a throwing stub
+  (10 observed failing — refusal tests can't distinguish stub throws from
+  real refusals, which is a known limit of throw-stub TDD), then green.
+- **Threshold is a constant, not a parameter.** `deploySafe` hard-codes
+  2-of-3; a configurable threshold is an invitation to misdeploy. Owner
+  validation (exactly 3, checksummed, distinct case-insensitively) runs
+  before any network access.
+- **Deployment output is never trusted.** `verifySafeDeployment` reads
+  `getOwners()`/`getThreshold()` from the contract with a plain viem client
+  and inline two-function ABI, compares against the expected owner set, and
+  hard-errors on any mismatch, wrong count, or RPC failure. The pre-funding
+  checklist relies on this read-back, not on the SDK's return values.
+- **EVM signing stays in the JS layer via viem, per CLAUDE.md.** The Rust
+  core's mandate covers Bitcoin key material; the EVM component's strength
+  is the contract's 2-of-3, not signer A's location. A test asserts the
+  viem account object never serialises its private key.
+- **Signer derivation is one signer-agnostic function** taking 32 entropy
+  bytes; A/B/C differ only in where the flow is run. Fail-closed checks:
+  wrong length and all-zero refuse; out-of-range scalars are rejected by
+  viem/noble. The transient hex string of the key cannot be zeroed in JS —
+  LIMITATIONS.md material.
+- **`deploySafe`'s network path is exercised by `scripts/deploy-safe.ts`
+  on Base Sepolia manually, not by automated tests.** Mock-testing the
+  SDK's own RPC conversation would test the mock; the security-relevant
+  logic (validation + read-back) is what the automated suite covers, with
+  mocked transports for the read-back's good and bad chain states.
+- **Not in this session, by scope:** encrypted at-rest storage of signer A
+  (next), the second-device approval flow, transaction building/signing.
+
+## Session 4 — encrypted at-rest storage (2026-08-23)
+
+- **New dep, approved before adding: `@capacitor/preferences` =8.0.1**
+  (Android SharedPreferences). Chosen over WebView localStorage, which the
+  OS may evict. The adapter is a dumb pass-through; every security decision
+  lives in the injectable-backend store module and is tested there.
+- **Tests red-first:** the storage suite was observed failing against a
+  throwing stub before implementation, then green (14 tests).
+- **Scheme per PLAN.md §7's named cut:** WebCrypto PBKDF2-HMAC-SHA256 at
+  600,000 iterations deriving AES-256-GCM, instead of Argon2id/StrongBox.
+  This layer is defence in depth only — a fully decrypted signer A still
+  cannot move funds against the 2-of-3 contract.
+- **The store is generic (`sealSecret`/`openSecret`)** so the Bitcoin seed
+  reuses it at step 5. The Bitcoin passphrase will never touch it — that is
+  a hard rule, not a storage-layer decision.
+- **Fail-closed properties tested:** unavailable storage refuses with
+  exactly one write attempt and that attempt already sealed (no plaintext
+  retry); missing WebCrypto refuses before anything reaches the backend;
+  wrong PIN, tampered ciphertext/iv, malformed or wrong-version envelopes,
+  and missing entries all refuse; envelopes claiming fewer KDF iterations
+  than required are rejected before decryption (downgrade refusal — GCM
+  would catch it anyway, but the explicit check costs nothing).
+- **Salts and ivs come from `drawPlatformEntropy`** — the same health-checked
+  fail-closed draw as seed generation, so a dead RNG aborts sealing rather
+  than producing a weak salt or reused iv. Two seals of the same secret are
+  tested to produce different salt, iv, and ciphertext.
+- **Envelope is versioned (`v: 1`)** so a future KDF upgrade is an explicit
+  migration, not a silent format guess.
+- **PIN policy: minimum 6 characters,** enforced at seal and open. The PIN
+  gates convenience, not funds — brute-forcing it yields a key that is
+  insufficient by design.
+- **TS 5.9 typed-array strictness:** entropy draws and sealed secrets are
+  typed `Uint8Array<ArrayBuffer>` end-to-end so WebCrypto's BufferSource
+  accepts them without casts.
+
+## Session 5 — Base Sepolia dry run (2026-08-23)
+
+- **First 2-of-3 Safe deployed and verified on Base Sepolia**
+  (`0xE33cD51c1a9dbE83663d3e1F137090B431B92E9D`, throwaway owners). The
+  read-back returned 3 owners, threshold 2, via our own verification path
+  and independently via raw `eth_call`.
+- **Load-balanced public RPCs can serve stale reads:** verification
+  immediately after the deployment receipt hit a lagging replica and saw no
+  code at the Safe address. Fix: the deploy script now waits (bounded, 15 ×
+  2s) for code to become visible before the strict read-back. The wait is
+  availability plumbing in the script only — `verifySafeDeployment` itself
+  stays strict with no retries, and if code never appears it still fails
+  hard.
+- **Added `scripts/verify-safe.ts`:** read-back verification decoupled from
+  deployment, so checklist evidence can be produced any time without
+  touching deployment paths. This, run against `CHAIN=base`, is the
+  intended pre-funding checklist artifact.
+- **Node runs the scripts directly** (native type stripping); relative
+  imports in scripts use explicit `.ts` extensions, enabled by
+  `allowImportingTsExtensions`.

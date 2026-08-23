@@ -31,9 +31,11 @@ export class EntropyError extends Error {
   }
 }
 
-/** The single platform API surface this module consumes, injectable in tests. */
+/** The single platform API surface this module consumes, injectable in tests.
+ * ArrayBuffer-backed (never SharedArrayBuffer) so draws satisfy WebCrypto's
+ * BufferSource downstream. */
 export interface PlatformCrypto {
-  getRandomValues(buffer: Uint8Array): Uint8Array;
+  getRandomValues(buffer: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer>;
 }
 
 export interface EntropySourceReport {
@@ -61,7 +63,7 @@ export async function initEntropyCore(input: {
  * missing API, short fill, or degenerate output. */
 export function drawPlatformEntropy(
   cryptoObj: PlatformCrypto | undefined = globalThis.crypto,
-): Uint8Array {
+): Uint8Array<ArrayBuffer> {
   if (cryptoObj === undefined || typeof cryptoObj.getRandomValues !== "function") {
     throw new EntropyError("platform CSPRNG (crypto.getRandomValues) is unavailable");
   }

@@ -13,8 +13,11 @@
   "dependencies": {
     "@capacitor/android": "8.5.0",
     "@capacitor/core": "8.5.0",
+    "@capacitor/preferences": "8.0.1",
+    "@safe-global/protocol-kit": "8.0.6",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "viem": "2.55.19"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.0",
