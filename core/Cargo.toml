@@ -1,0 +1,19 @@
+[package]
+name = "adversarial-core"
+version = "0.1.0"
+edition = "2021"
+description = "Rust core for the adversarial wallet. All key material handling lives here."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "=0.2.127"
+
+# wasm-opt is a prebuilt binary wasm-pack downloads from GitHub releases at
+# build time. Unpinned binaries do not belong in this build path; we have no
+# size or speed need that justifies it. Re-evaluate only if APK size becomes
+# a problem, and pin it if so.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
