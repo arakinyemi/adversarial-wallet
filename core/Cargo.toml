@@ -10,6 +10,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen = "=0.2.127"
+sha2 = "=0.10.9"
+zeroize = "=1.9.0"
 
 # wasm-opt is a prebuilt binary wasm-pack downloads from GitHub releases at
 # build time. Unpinned binaries do not belong in this build path; we have no

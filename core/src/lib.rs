@@ -1,3 +1,5 @@
+pub mod entropy;
+
 use wasm_bindgen::prelude::*;
 
 /// Trivial boundary proof: reverses a string.
