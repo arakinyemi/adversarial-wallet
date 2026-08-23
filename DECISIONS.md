@@ -184,3 +184,36 @@ most of the handover documentation. Newest entries at the bottom.
 - **Node runs the scripts directly** (native type stripping); relative
   imports in scripts use explicit `.ts` extensions, enabled by
   `allowImportingTsExtensions`.
+
+## Session 6 — Bitcoin key derivation in the Rust core (2026-08-23)
+
+- **New crates, approved before adding: `bitcoin` =0.32.102 and
+  `bip39` =2.2.2** (rust-bitcoin org, both explicitly sanctioned by
+  CLAUDE.md). No rand features anywhere — entropy is always supplied by the
+  entropy module, never generated inside a crate. bip39's zeroize feature
+  enabled.
+- **Tests red-first:** 12 Rust tests written against `todo!()` stubs,
+  observed failing, then green (23 total core tests). Boundary tests added
+  on the TS side (48 total).
+- **24-word mnemonics only.** `entropy_to_mnemonic` takes exactly 32 bytes;
+  16 bytes would be valid BIP39 but is refused — no 12-word path exists in
+  this wallet.
+- **BIP84 native segwit (m/84'/coin'/0'/0/index),** mainnet/testnet
+  parametrized, verified against the BIP84 spec reference vectors exactly.
+- **The passphrase is a per-call argument** — never a struct field, never
+  stored, no default, no remembered value. Tests assert: passphrase changes
+  the derived address (CLAUDE.md's required negative property), passphrases
+  are case-sensitive, and error messages never echo mnemonic words.
+- **BIP39 seed zeroized after master-key derivation**; xprvs live only
+  inside the derivation call. Residue reduction, not isolation — WASM
+  linear memory stays JS-readable (LIMITATIONS.md).
+- **Toolchain decision (approved): Homebrew LLVM for wasm builds.** Apple's
+  Xcode clang cannot target wasm32-unknown-unknown, which secp256k1's C
+  code requires. `brew install llvm` (keg-only) with `CC_/AR_` variables
+  scoped to the wasm32 target only in `build:wasm` — host builds still use
+  Xcode clang. Build-environment prerequisite for the README. Alternatives
+  rejected: pure-Rust k256 (means abandoning the sanctioned bitcoin/bip39
+  crates — custom-derivation territory), Docker (slower iteration; may
+  still return at step 8 as a pinned reproducible release-build recipe).
+- **Deferred to next sessions:** Esplora watch-only balance display, PSBT
+  construction and passphrase-gated signing, sweep UI.

@@ -12,6 +12,10 @@ crate-type = ["cdylib", "rlib"]
 wasm-bindgen = "=0.2.127"
 sha2 = "=0.10.9"
 zeroize = "=1.9.0"
+# No rand features anywhere: entropy is supplied by the entropy module,
+# never generated inside these crates.
+bitcoin = { version = "=0.32.102", default-features = false, features = ["std"] }
+bip39 = { version = "=2.2.2", default-features = false, features = ["std", "zeroize"] }
 
 # wasm-opt is a prebuilt binary wasm-pack downloads from GitHub releases at
 # build time. Unpinned binaries do not belong in this build path; we have no

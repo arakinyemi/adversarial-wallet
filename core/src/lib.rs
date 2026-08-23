@@ -1,3 +1,4 @@
+pub mod btc;
 pub mod entropy;
 
 use wasm_bindgen::prelude::*;

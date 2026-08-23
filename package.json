@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "build:wasm": "wasm-pack build core --target web",
+    "build:wasm": "CC_wasm32_unknown_unknown=/opt/homebrew/opt/llvm/bin/clang AR_wasm32_unknown_unknown=/opt/homebrew/opt/llvm/bin/llvm-ar wasm-pack build core --target web",
     "lint": "eslint .",
     "test": "vitest run"
   },
