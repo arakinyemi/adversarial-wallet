@@ -93,7 +93,7 @@ export default function App() {
     );
   }
   if (!isUnlocked()) {
-    return <UnlockScreen backend={backend} />;
+    return <UnlockScreen backend={backend} biometricEnabled={config.biometricUnlock} />;
   }
 
   const home = () => setRoute("home");
