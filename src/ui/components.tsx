@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 
 export function Card({ title, children }: { title?: string; children: ReactNode }) {
   return (
-    <div className="card">
-      {title !== undefined && <div className="section-title">{title}</div>}
+    <div className="panel pad" style={{ marginBottom: 12 }}>
+      {title !== undefined && <div className="micro" style={{ marginBottom: 12 }}>{title}</div>}
       {children}
     </div>
   );
@@ -49,4 +49,25 @@ export function Field({
 /** Renders any thrown value as a displayable message. Never logs. */
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+export function TopBar({ title, onBack }: { title: string; onBack?: () => void }) {
+  return (
+    <div className="topbar">
+      {onBack !== undefined && (
+        <button className="back" onClick={onBack} aria-label="Back">←</button>
+      )}
+      <span className="title">{title}</span>
+    </div>
+  );
+}
+
+export function Segbar({ total, at }: { total: number; at: number }) {
+  return (
+    <div className="segbar">
+      {Array.from({ length: total }, (_, i) => (
+        <span key={i} className={i <= at ? "on" : ""} />
+      ))}
+    </div>
+  );
 }

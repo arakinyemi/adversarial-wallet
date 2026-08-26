@@ -9,6 +9,7 @@ export const CONFIG_KEY = "wallet.config.v1";
 
 export interface WalletConfig {
   network: "mainnet" | "testnet";
+  theme: "dark" | "light";
   esploraUrl: string;
   /** Account xpub of the passphrase wallet — public, watch-only. */
   xpub: string;
@@ -21,6 +22,7 @@ export interface WalletConfig {
 
 export const DEFAULT_CONFIG: WalletConfig = {
   network: "testnet",
+  theme: "dark",
   esploraUrl: "https://blockstream.info/testnet/api",
   xpub: "",
   lnbitsUrl: "",

@@ -1,21 +1,19 @@
-// Savings (2-of-3 Safe on Base). This device holds one owner key of three;
-// every transaction needs approval from a second device. Sending is a
-// two-step handoff: propose here, approve on the other device (or vice
-// versa) — the payload travels by copy/paste.
-//
-// The signer key gets its own dice ceremony, deliberately independent of
-// the Bitcoin seed (see DECISIONS.md session 10), and is sealed under the
-// PIN. Key bytes are unsealed per action and zeroed in finally.
+// Savings (2-of-3 Safe on Base). This phone holds one owner key of three;
+// every send needs a second device. Propose here → payload travels by copy →
+// approve there (or vice versa). The signing key has its own ceremony,
+// independent of the Bitcoin seed; key bytes are unsealed per action and
+// zeroed in finally.
 
 import { useEffect, useState } from "react";
 import { createPublicClient, formatEther, getAddress, http, parseEther, type Hex } from "viem";
 import { base, baseSepolia } from "viem/chains";
 import { entropyToEvmSigner, verifySafeDeployment } from "../evm";
 import { countersignAndExecute, proposeSafeSpend } from "../evm/spend";
-import { generateSeedEntropy, MIN_DICE_ROLLS } from "../entropy";
+import { generateQuickSeedEntropy, generateSeedEntropy, MIN_DICE_ROLLS } from "../entropy";
 import { hasSecret, openSecret, sealSecret, type KeyValueBackend } from "../storage";
-import { Card, ErrorBanner, Field, Row, SuccessBanner, errorMessage } from "./components";
-import { DicePad } from "./DicePad";
+import { ErrorBanner, TopBar, errorMessage } from "./components";
+import { DiceEntry } from "./DiceEntry";
+import { getSessionPin } from "./session-lock";
 import { truncateMiddle } from "./format";
 import type { WalletConfig } from "./wallet-config";
 
@@ -24,38 +22,43 @@ export const EVM_SIGNER_KEY = "wallet.evm-signer-a.v1";
 const toHex = (bytes: Uint8Array): Hex =>
   `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}` as Hex;
 
+type View = "main" | "send" | "wait" | "approve" | "done";
+
 export function SafeScreen({
   backend,
   config,
+  onHome,
 }: {
   backend: KeyValueBackend;
   config: WalletConfig;
+  onHome: () => void;
 }) {
+  const [view, setView] = useState<View>("main");
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [signerSealed, setSignerSealed] = useState<boolean | null>(null);
   const [signerAddress, setSignerAddress] = useState<string | null>(null);
   const [dice, setDice] = useState("");
-  const [pin, setPin] = useState("");
-  const [verified, setVerified] = useState<{ owners: string[]; threshold: string } | null>(null);
+  const [useDice, setUseDice] = useState(false);
+  const [verifiedLine, setVerifiedLine] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
   const [sendTo, setSendTo] = useState("");
   const [sendEth, setSendEth] = useState("");
   const [proposal, setProposal] = useState<string | null>(null);
   const [incoming, setIncoming] = useState("");
+  const [doneTx, setDoneTx] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const chain = config.network === "mainnet" ? base : baseSepolia;
   const rpcUrl = chain.rpcUrls.default.http[0]!;
-  const diceClean = dice.replace(/[^1-6]/g, "");
 
   useEffect(() => {
     void hasSecret(backend, EVM_SIGNER_KEY).then(setSignerSealed);
   }, [backend]);
 
-  const withSignerKey = async <T,>(
-    fn: (key: Hex, address: string) => Promise<T>,
-  ): Promise<T> => {
+  const withSignerKey = async <T,>(fn: (key: Hex, address: string) => Promise<T>): Promise<T> => {
+    const pin = getSessionPin();
+    if (pin === null) throw new Error("Session locked; reopen the app to unlock.");
     const keyBytes = await openSecret(backend, EVM_SIGNER_KEY, pin);
     try {
       const account = entropyToEvmSigner(keyBytes as Uint8Array<ArrayBuffer>);
@@ -69,14 +72,14 @@ export function SafeScreen({
     setError(null);
     setBusy(true);
     try {
-      if (pin.length < 6) throw new Error("Enter your wallet PIN (at least 6 digits).");
-      const { entropy } = generateSeedEntropy(diceClean);
+      const pin = getSessionPin();
+      if (pin === null) throw new Error("Session locked; reopen the app to unlock.");
+      const { entropy } = useDice ? generateSeedEntropy(dice) : generateQuickSeedEntropy();
       try {
         const account = entropyToEvmSigner(entropy as Uint8Array<ArrayBuffer>);
         await sealSecret(backend, EVM_SIGNER_KEY, entropy as Uint8Array<ArrayBuffer>, pin);
         setSignerAddress(account.address);
         setSignerSealed(true);
-        setSuccess("Signing key created. Add this address as an owner of your Safe.");
       } finally {
         entropy.fill(0);
       }
@@ -84,22 +87,6 @@ export function SafeScreen({
       setError(errorMessage(e));
     } finally {
       setDice("");
-      setPin("");
-      setBusy(false);
-    }
-  };
-
-  const showSignerAddress = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      await withSignerKey(async (_key, address) => {
-        setSignerAddress(address);
-      });
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setPin("");
       setBusy(false);
     }
   };
@@ -107,7 +94,7 @@ export function SafeScreen({
   const verify = async () => {
     setError(null);
     setBusy(true);
-    setVerified(null);
+    setVerifiedLine(null);
     try {
       if (config.safeOwners.length !== 3) {
         throw new Error("Add the Safe address and its three owners in Settings first.");
@@ -118,10 +105,8 @@ export function SafeScreen({
         config.safeAddress,
         config.safeOwners as unknown as readonly [string, string, string],
       );
-      setVerified({ owners: result.owners, threshold: result.threshold.toString() });
-      setBalance(
-        formatEther(await client.getBalance({ address: getAddress(config.safeAddress) })),
-      );
+      setVerifiedLine(`${result.owners.length} owners · ${result.threshold} approvals ✓`);
+      setBalance(formatEther(await client.getBalance({ address: getAddress(config.safeAddress) })));
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -137,20 +122,15 @@ export function SafeScreen({
       if (valueWei <= 0n) throw new Error("Amount must be greater than zero.");
       const payload = await withSignerKey((key) =>
         proposeSafeSpend({
-          rpcUrl,
-          chain,
-          safeAddress: config.safeAddress,
-          signerKey: key,
-          to: sendTo.trim(),
-          valueWei,
+          rpcUrl, chain, safeAddress: config.safeAddress,
+          signerKey: key, to: sendTo.trim(), valueWei,
         }),
       );
       setProposal(payload);
-      setSuccess("Signed on this device. Approve it on your second device to send.");
+      setView("wait");
     } catch (e) {
       setError(errorMessage(e));
     } finally {
-      setPin("");
       setBusy(false);
     }
   };
@@ -161,133 +141,189 @@ export function SafeScreen({
     try {
       const { txHash } = await withSignerKey((key, address) =>
         countersignAndExecute({
-          rpcUrl,
-          chain,
-          signerKey: key,
-          localSignerAddress: address,
-          proposalJson: incoming.trim(),
+          rpcUrl, chain, signerKey: key,
+          localSignerAddress: address, proposalJson: incoming.trim(),
         }),
       );
-      setSuccess(`Sent. Transaction: ${txHash}`);
+      setDoneTx(txHash);
       setIncoming("");
+      setView("done");
     } catch (e) {
       setError(errorMessage(e));
     } finally {
-      setPin("");
       setBusy(false);
     }
   };
 
-  const pinField = (
-    <Field label="PIN">
-      <input type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} />
-    </Field>
-  );
+  const copyPayload = async () => {
+    if (proposal === null) return;
+    await navigator.clipboard.writeText(proposal);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
+  // --- signer setup (first run on this device) ---
+  if (signerSealed === false) {
+    return (
+      <div className="screen">
+        <TopBar title="Savings · set up" onBack={onHome} />
+        <ErrorBanner error={error} />
+        <div className="h1" style={{ marginTop: 20, fontSize: 24 }}>Create this phone's signing key</div>
+        <div className="sub" style={{ marginTop: 8 }}>
+          Savings payments need approval from two devices. Each device has its
+          own key.
+        </div>
+        <button className="ackbox" style={{ marginTop: 18, borderColor: "var(--border)" }} onClick={() => setUseDice(!useDice)}>
+          <span className="box" style={{ borderColor: "var(--muted)", color: "var(--muted)" }}>{useDice ? "✓" : ""}</span>
+          <span className="lbl">Advanced: mix in {MIN_DICE_ROLLS}+ physical dice rolls, like the advanced wallet setup.</span>
+        </button>
+        {useDice && (
+          <DiceEntry value={dice} min={MIN_DICE_ROLLS} onChange={(v) => setDice(v.replace(/[^1-6]/g, "").slice(0, 200))} />
+        )}
+        {!useDice && <div className="grow" />}
+        <button
+          className="btn primary" style={{ marginTop: 14 }}
+          disabled={busy || (useDice && dice.length < MIN_DICE_ROLLS)}
+          onClick={() => void createSigner()}
+        >
+          {busy ? "Creating…" : "Create signing key"}
+        </button>
+      </div>
+    );
+  }
+
+  if (view === "send") {
+    return (
+      <div className="screen">
+        <TopBar title="Send from Savings" onBack={() => setView("main")} />
+        <ErrorBanner error={error} />
+        <div className="stack" style={{ marginTop: 24 }}>
+          <div className="amountbox">
+            <input inputMode="decimal" value={sendEth} onChange={(e) => setSendEth(e.target.value)} placeholder="0.00" autoComplete="off" />
+            <span className="unit">ETH</span>
+          </div>
+          <input value={sendTo} onChange={(e) => setSendTo(e.target.value)} placeholder="Address" spellCheck={false} autoComplete="off" style={{ fontSize: 13 }} />
+        </div>
+        <div className="faint" style={{ marginTop: 14 }}>
+          This phone signs first. Your second device must approve.
+        </div>
+        <div className="grow" />
+        <button className="btn primary" disabled={busy || sendEth === "" || sendTo.trim() === ""} onClick={() => void propose()}>
+          {busy ? "Signing…" : "Sign on this phone"}
+        </button>
+      </div>
+    );
+  }
+
+  if (view === "wait" && proposal !== null) {
+    return (
+      <div className="screen">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <span className="topbar"><span className="title">Signed on this phone</span></span>
+          <span className="micro accent">1 of 2</span>
+        </div>
+        <div className="mono" style={{ marginTop: 16, fontSize: 13, color: "var(--body)" }}>
+          {sendEth} ETH → {truncateMiddle(sendTo.trim(), 10)}
+        </div>
+        <div className="panel pad" style={{ marginTop: 20, borderColor: "oklch(0.7 0.19 300 / .5)", display: "flex", flexDirection: "column", gap: 14 }}>
+          <textarea rows={5} readOnly value={proposal} className="mono" style={{ fontSize: 10.5 }} onFocus={(e) => e.target.select()} />
+          <div className="body-dim" style={{ fontSize: 12, textAlign: "center" }}>
+            Copy this to your second device and approve it there.
+          </div>
+          <button className="btn ghost small" style={{ height: 44 }} onClick={() => void copyPayload()}>
+            {copied ? "Copied" : "Copy the request"}
+          </button>
+        </div>
+        <div className="statusdot" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+          <i className="warn" />
+          waiting for approval · nothing has moved
+        </div>
+        <div className="grow" />
+        <button className="linklike danger" onClick={() => { setProposal(null); setView("main"); }}>
+          Done for now
+        </button>
+      </div>
+    );
+  }
+
+  if (view === "approve") {
+    return (
+      <div className="screen">
+        <TopBar title="Approve a send" onBack={() => setView("main")} />
+        <ErrorBanner error={error} />
+        <div className="sub" style={{ marginTop: 16 }}>
+          Paste the request from the other device. Check the amount and
+          address inside it — approving executes the payment.
+        </div>
+        <div className="stack" style={{ marginTop: 14 }}>
+          <textarea rows={5} value={incoming} onChange={(e) => setIncoming(e.target.value)} placeholder="Paste the request" spellCheck={false} autoComplete="off" style={{ fontSize: 11 }} />
+        </div>
+        <div className="grow" />
+        <button className="btn primary" disabled={busy || incoming.trim() === ""} onClick={() => void approveAndSend()}>
+          {busy ? "Sending…" : "Approve and send"}
+        </button>
+      </div>
+    );
+  }
+
+  if (view === "done") {
+    return (
+      <div className="screen">
+        <div className="grow center">
+          <div className="mark ok" />
+          <div className="h1 big">Payment executed.</div>
+          <div className="body-dim" style={{ fontSize: 13 }}>
+            Both signatures collected. Transaction:
+          </div>
+          <div className="mono" style={{ fontSize: 12, color: "var(--muted)", wordBreak: "break-all" }}>{doneTx}</div>
+        </div>
+        <button className="btn ghost" onClick={() => setView("main")}>Done</button>
+      </div>
+    );
+  }
+
+  const owners = config.safeOwners;
   return (
-    <>
+    <div className="screen">
+      <TopBar title="Savings · Base" onBack={onHome} />
       <ErrorBanner error={error} />
-      <SuccessBanner message={success} />
-
-      {signerSealed === false && (
-        <Card title="Create your signing key">
-          <p className="muted">
-            This device needs its own signing key. Roll a real die at least{" "}
-            {MIN_DICE_ROLLS} times and tap each result — same as when you
-            created your wallet.
-          </p>
-          <div className="spacer" />
-          <DicePad value={diceClean} min={MIN_DICE_ROLLS} onChange={setDice} />
-          {pinField}
-          <button
-            className="primary"
-            disabled={busy || diceClean.length < MIN_DICE_ROLLS}
-            onClick={() => void createSigner()}
-          >
-            Create signing key
-          </button>
-        </Card>
+      <div style={{ marginTop: 26 }}>
+        {config.safeAddress === "" ? (
+          <div className="sub">Add your Safe address in Settings to see it here.</div>
+        ) : (
+          <>
+            <div className="balance-big">{balance ?? "—"} <span style={{ fontSize: 18, color: "var(--muted)" }}>ETH</span></div>
+            <div className="balance-sub"><span>2-of-3 · {truncateMiddle(config.safeAddress, 8)}</span></div>
+          </>
+        )}
+      </div>
+      {owners.length === 3 && (
+        <div className="panel" style={{ marginTop: 22 }}>
+          {["This phone", "Second device", "Recovery key"].map((label, i) => (
+            <div className="rowline" key={label} style={{ padding: "13px 18px" }}>
+              <span style={{ fontFamily: "var(--font)" }}>{label}</span>
+              <span className="v plain mono" style={{ fontSize: 12, color: "var(--muted)" }}>{truncateMiddle(owners[i]!, 8)}</span>
+            </div>
+          ))}
+        </div>
       )}
-
-      {signerSealed === true && (
-        <Card title="Savings">
-          {config.safeAddress === "" ? (
-            <div className="muted">Add your Safe address in Settings to see it here.</div>
-          ) : (
-            <>
-              <Row label="Account" value={truncateMiddle(config.safeAddress, 10)} mono />
-              {balance !== null && <Row label="Balance" value={`${balance} ETH`} />}
-              <div className="spacer" />
-              <button className="secondary" disabled={busy} onClick={() => void verify()}>
-                {busy ? "Checking…" : "Check account on chain"}
-              </button>
-            </>
-          )}
-          {verified !== null && (
-            <>
-              <div className="spacer" />
-              <div className="banner success">
-                Confirmed on chain: {verified.owners.length} owners, {verified.threshold} approvals
-                required.
-              </div>
-            </>
-          )}
-          {signerAddress !== null ? (
-            <Row label="This device's key" value={truncateMiddle(signerAddress, 10)} mono />
-          ) : (
-            <>
-              {pinField}
-              <button className="secondary" disabled={busy} onClick={() => void showSignerAddress()}>
-                Show this device's key address
-              </button>
-            </>
-          )}
-        </Card>
+      {config.safeAddress !== "" && (
+        <button className="panel" style={{ marginTop: 12, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", cursor: "pointer", width: "100%" }} onClick={() => void verify()}>
+          <span style={{ font: "600 13px var(--font)", color: "var(--text)" }}>Verify on chain</span>
+          <span className="mono" style={{ fontSize: 12, color: verifiedLine !== null ? "var(--success)" : "var(--faint)" }}>
+            {busy ? "checking…" : verifiedLine ?? "tap to check"}
+          </span>
+        </button>
       )}
-
-      {signerSealed === true && config.safeAddress !== "" && proposal === null && (
-        <Card title="Send">
-          <p className="muted">
-            Sending needs approval from two devices. Start here, then finish
-            on your second device.
-          </p>
-          <div className="spacer" />
-          <Field label="Recipient address">
-            <input value={sendTo} onChange={(e) => setSendTo(e.target.value)} spellCheck={false} autoComplete="off" />
-          </Field>
-          <Field label="Amount (ETH)">
-            <input inputMode="decimal" value={sendEth} onChange={(e) => setSendEth(e.target.value)} autoComplete="off" />
-          </Field>
-          {pinField}
-          <button className="primary" disabled={busy} onClick={() => void propose()}>
-            {busy ? "Signing…" : "Sign on this device"}
-          </button>
-        </Card>
+      {signerAddress !== null && (
+        <div className="faint" style={{ marginTop: 12 }}>This phone's key: <span className="mono">{truncateMiddle(signerAddress, 10)}</span></div>
       )}
-
-      {proposal !== null && (
-        <Card title="Waiting for second approval">
-          <p className="muted">
-            Copy this to your second device and approve it there to complete
-            the send.
-          </p>
-          <div className="spacer" />
-          <textarea rows={5} readOnly value={proposal} className="mono" onFocus={(e) => e.target.select()} />
-          <button className="secondary" onClick={() => setProposal(null)}>Done</button>
-        </Card>
-      )}
-
-      {signerSealed === true && (
-        <Card title="Approve a send from your other device">
-          <Field label="Paste the request">
-            <textarea rows={4} value={incoming} onChange={(e) => setIncoming(e.target.value)} spellCheck={false} autoComplete="off" />
-          </Field>
-          {pinField}
-          <button className="primary" disabled={busy || incoming.trim() === ""} onClick={() => void approveAndSend()}>
-            {busy ? "Sending…" : "Approve and send"}
-          </button>
-        </Card>
-      )}
-    </>
+      <div className="grow" />
+      <div className="stack">
+        <button className="btn primary" disabled={config.safeAddress === ""} onClick={() => setView("send")}>Send</button>
+        <button className="btn ghost" onClick={() => setView("approve")}>Approve a send from the other device</button>
+      </div>
+      <div className="micro dim" style={{ textAlign: "center", marginTop: 12 }}>needs this phone + one other</div>
+    </div>
   );
 }

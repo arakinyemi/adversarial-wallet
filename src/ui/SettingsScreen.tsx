@@ -3,17 +3,20 @@
 
 import { useState } from "react";
 import type { KeyValueBackend } from "../storage";
-import { Card, ErrorBanner, Field, SuccessBanner, errorMessage } from "./components";
+import { Card, ErrorBanner, Field, SuccessBanner, TopBar, errorMessage } from "./components";
+import { lock } from "./session-lock";
 import { saveConfig, type WalletConfig } from "./wallet-config";
 
 export function SettingsScreen({
   backend,
   config,
   onChange,
+  onHome,
 }: {
   backend: KeyValueBackend;
   config: WalletConfig;
   onChange: (next: WalletConfig) => void;
+  onHome: () => void;
 }) {
   const [draft, setDraft] = useState<WalletConfig>(config);
   const [owners, setOwners] = useState(config.safeOwners.join("\n"));
@@ -43,7 +46,9 @@ export function SettingsScreen({
     setDraft({ ...draft, [key]: value });
 
   return (
-    <>
+    <div className="screen">
+      <TopBar title="Settings" onBack={onHome} />
+      <div className="spacer" />
       <ErrorBanner error={error} />
       <SuccessBanner message={saved} />
       <Card title="Network">
@@ -60,12 +65,15 @@ export function SettingsScreen({
           <input value={draft.esploraUrl} onChange={(e) => set("esploraUrl", e.target.value)} spellCheck={false} />
         </Field>
       </Card>
-      <Card title="Lightning (LNbits)">
-        <Field label="LNbits URL">
-          <input value={draft.lnbitsUrl} onChange={(e) => set("lnbitsUrl", e.target.value)} spellCheck={false} />
-        </Field>
-        <Field label="Invoice key" hint="Read/receive only. The admin key is sealed from the Lightning screen, never stored here.">
-          <input value={draft.lnbitsInvoiceKey} onChange={(e) => set("lnbitsInvoiceKey", e.target.value)} spellCheck={false} autoComplete="off" />
+      <Card title="Appearance">
+        <Field label="Theme">
+          <select
+            value={draft.theme}
+            onChange={(e) => set("theme", e.target.value as WalletConfig["theme"])}
+          >
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
         </Field>
       </Card>
       <Card title="Safe on Base">
@@ -76,9 +84,19 @@ export function SettingsScreen({
           <textarea rows={3} value={owners} onChange={(e) => setOwners(e.target.value)} spellCheck={false} />
         </Field>
       </Card>
-      <button className="primary" onClick={() => void save()}>
+      <button className="btn primary" onClick={() => void save()}>
         Save settings
       </button>
-    </>
+      <Card title="Security">
+        <p className="muted">
+          The app locks itself after two minutes of inactivity or when you
+          switch away. Lock it now to require your PIN again.
+        </p>
+        <div className="spacer" />
+        <button className="btn ghost small" onClick={() => lock()}>
+          Lock now
+        </button>
+      </Card>
+    </div>
   );
 }

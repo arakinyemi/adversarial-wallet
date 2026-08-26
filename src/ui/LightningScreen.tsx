@@ -1,59 +1,63 @@
-// Lightning via LNbits. The admin (pay) key is sealed under the PIN and
-// unsealed per payment; the invoice key is read-only and lives in config.
-// The sweep badge is the visible face of the zero-resting-balance design.
+// Instant · Lightning (LNbits). The admin key is sealed under the PIN and
+// unsealed per payment while the session is unlocked. Settled payments show
+// the locally verified preimage as proof.
 
 import { useCallback, useEffect, useState } from "react";
 import {
   createInvoice,
+  createWallet,
   fetchPaymentProof,
   getBalanceMsat,
   payInvoice,
   type LnbitsConfig,
 } from "../lightning";
+import { LNBITS_INSTANCE_URL } from "../lightning/instance";
 import { hasSecret, openSecret, sealSecret, type KeyValueBackend } from "../storage";
-import { Card, ErrorBanner, Field, Row, SuccessBanner, errorMessage } from "./components";
+import { ErrorBanner, TopBar, errorMessage } from "./components";
 import { msatToSats, truncateMiddle } from "./format";
-import type { WalletConfig } from "./wallet-config";
+import { getSessionPin } from "./session-lock";
+import { saveConfig, type WalletConfig } from "./wallet-config";
 
 export const LNBITS_ADMIN_KEY = "wallet.lnbits-admin.v1";
+
+type View = "main" | "request" | "pay" | "paid";
 
 export function LightningScreen({
   backend,
   config,
+  onConfigChange,
+  onHome,
 }: {
   backend: KeyValueBackend;
   config: WalletConfig;
+  onConfigChange: (next: WalletConfig) => void;
+  onHome: () => void;
 }) {
+  const [view, setView] = useState<View>("main");
   const [balanceMsat, setBalanceMsat] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [invoiceAmount, setInvoiceAmount] = useState("");
   const [invoiceMemo, setInvoiceMemo] = useState("");
   const [invoice, setInvoice] = useState<{ bolt11: string; paymentHash: string } | null>(null);
   const [bolt11ToPay, setBolt11ToPay] = useState("");
-  const [pin, setPin] = useState("");
-  const [adminKeyInput, setAdminKeyInput] = useState("");
   const [adminSealed, setAdminSealed] = useState(false);
+  const [proofLine, setProofLine] = useState("");
+  const [copied, setCopied] = useState(false);
 
-  const readConfig: LnbitsConfig = {
-    baseUrl: config.lnbitsUrl,
-    apiKey: config.lnbitsInvoiceKey,
-  };
+  const configured = config.lnbitsUrl !== "" && config.lnbitsInvoiceKey !== "";
+  const readConfig: LnbitsConfig = { baseUrl: config.lnbitsUrl, apiKey: config.lnbitsInvoiceKey };
 
   const refresh = useCallback(async () => {
     setError(null);
-    if (config.lnbitsUrl === "" || config.lnbitsInvoiceKey === "") {
-      setBalanceMsat(null);
-      return;
-    }
+    if (!configured) { setBalanceMsat(null); return; }
     try {
-      setBalanceMsat(await getBalanceMsat(readConfig));
+      setBalanceMsat(await getBalanceMsat({ baseUrl: config.lnbitsUrl, apiKey: config.lnbitsInvoiceKey }));
     } catch (e) {
       setBalanceMsat(null);
       setError(errorMessage(e));
     }
-  }, [config.lnbitsUrl, config.lnbitsInvoiceKey]);
+  }, [config.lnbitsUrl, config.lnbitsInvoiceKey, configured]);
 
   useEffect(() => {
     void refresh();
@@ -64,8 +68,7 @@ export function LightningScreen({
     setError(null);
     setBusy(true);
     try {
-      const amount = Number(invoiceAmount);
-      setInvoice(await createInvoice(readConfig, amount, invoiceMemo));
+      setInvoice(await createInvoice(readConfig, Number(invoiceAmount), invoiceMemo));
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -73,23 +76,28 @@ export function LightningScreen({
     }
   };
 
-  const sealAdminKey = async () => {
+  const provision = async () => {
     setError(null);
     setBusy(true);
     try {
+      const pin = getSessionPin();
+      if (pin === null) throw new Error("Session locked; reopen the app to unlock.");
+      const wallet = await createWallet(LNBITS_INSTANCE_URL);
+      // Admin key sealed first: if sealing fails, nothing is configured and
+      // the next attempt provisions a fresh wallet — never a half-set-up one.
       await sealSecret(
         backend,
         LNBITS_ADMIN_KEY,
-        new TextEncoder().encode(adminKeyInput) as Uint8Array<ArrayBuffer>,
+        new TextEncoder().encode(wallet.adminKey) as Uint8Array<ArrayBuffer>,
         pin,
       );
       setAdminSealed(true);
-      setSuccess("Admin key sealed under PIN.");
+      const next = { ...config, lnbitsUrl: LNBITS_INSTANCE_URL, lnbitsInvoiceKey: wallet.invoiceKey };
+      await saveConfig(backend, next);
+      onConfigChange(next);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
-      setAdminKeyInput("");
-      setPin("");
       setBusy(false);
     }
   };
@@ -98,111 +106,151 @@ export function LightningScreen({
     setError(null);
     setBusy(true);
     try {
+      const pin = getSessionPin();
+      if (pin === null) throw new Error("Session locked; reopen the app to unlock.");
       const keyBytes = await openSecret(backend, LNBITS_ADMIN_KEY, pin);
-      let adminKey = "";
       try {
-        adminKey = new TextDecoder().decode(keyBytes);
-        const payConfig: LnbitsConfig = { baseUrl: config.lnbitsUrl, apiKey: adminKey };
+        const payConfig: LnbitsConfig = {
+          baseUrl: config.lnbitsUrl,
+          apiKey: new TextDecoder().decode(keyBytes),
+        };
         const { paymentHash } = await payInvoice(payConfig, bolt11ToPay.trim());
         const proof = await fetchPaymentProof(payConfig, paymentHash);
-        if (proof === null) {
-          setSuccess(`Payment in flight: ${truncateMiddle(paymentHash, 10)} (no proof yet — check again)`);
-        } else {
-          setSuccess(`Paid. Preimage proof: ${proof.preimage}`);
-        }
+        setProofLine(
+          proof !== null
+            ? `preimage ${truncateMiddle(proof.preimage, 12)} · verified`
+            : `in flight · ${truncateMiddle(paymentHash, 12)}`,
+        );
         setBolt11ToPay("");
+        setView("paid");
         void refresh();
       } finally {
         keyBytes.fill(0);
-        adminKey = "";
       }
     } catch (e) {
       setError(errorMessage(e));
     } finally {
-      setPin("");
       setBusy(false);
     }
   };
 
-  const swept = balanceMsat === 0;
+  const copyInvoice = async () => {
+    if (invoice === null) return;
+    await navigator.clipboard.writeText(invoice.bolt11);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
-  return (
-    <>
-      <ErrorBanner error={error} />
-      <SuccessBanner message={success} />
-      <Card title="Lightning">
-        {balanceMsat === null ? (
-          <div className="muted">
-            {config.lnbitsUrl === ""
-              ? "Add your Lightning connection in Settings to get started."
-              : "Couldn't load your balance right now."}
+  if (view === "request") {
+    return (
+      <div className="screen">
+        <TopBar title="Request" onBack={() => { setInvoice(null); setView("main"); }} />
+        <ErrorBanner error={error} />
+        <div className="stack" style={{ marginTop: 24 }}>
+          <div className="amountbox">
+            <input inputMode="numeric" value={invoiceAmount} onChange={(e) => setInvoiceAmount(e.target.value.replace(/\D/g, ""))} placeholder="0" autoComplete="off" />
+            <span className="unit">sats</span>
           </div>
-        ) : (
-          <>
-            <div className="balance">
-              {msatToSats(balanceMsat).toLocaleString("en-US")}
-              <span className="balance-unit">sats</span>
-            </div>
-            <div className="balance-sub">
-              {swept ? <span className="badge ok">empty</span> : "spendable now"}
-            </div>
-          </>
-        )}
-        <div className="spacer" />
-        <button className="secondary" disabled={busy} onClick={() => void refresh()}>
-          Refresh
-        </button>
-      </Card>
-      <Card title="Receive">
-        <Field label="Amount (sats)">
-          <input inputMode="numeric" value={invoiceAmount} onChange={(e) => setInvoiceAmount(e.target.value)} autoComplete="off" />
-        </Field>
-        <Field label="Memo">
-          <input value={invoiceMemo} onChange={(e) => setInvoiceMemo(e.target.value)} autoComplete="off" />
-        </Field>
-        <button className="primary" disabled={busy} onClick={() => void makeInvoice()}>
-          Create invoice
-        </button>
+          <input value={invoiceMemo} onChange={(e) => setInvoiceMemo(e.target.value)} placeholder="Memo (optional)" autoComplete="off" style={{ fontFamily: "var(--font)", fontSize: 14 }} />
+        </div>
         {invoice !== null && (
-          <>
-            <div className="spacer" />
-            <Row label="Invoice" value={<span className="mono" style={{ wordBreak: "break-all" }}>{invoice.bolt11}</span>} />
-            <Row label="Payment hash" value={truncateMiddle(invoice.paymentHash, 10)} mono />
-          </>
+          <div className="panel pad" style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
+            <div className="mono" style={{ fontSize: 11, lineHeight: 1.6, color: "var(--muted)", wordBreak: "break-all" }}>{invoice.bolt11}</div>
+            <button className="btn ghost small" style={{ height: 44 }} onClick={() => void copyInvoice()}>
+              {copied ? "Copied" : "Copy invoice"}
+            </button>
+          </div>
         )}
-      </Card>
-      <Card title="Send">
+        <div className="grow" />
+        {invoice === null && (
+          <button className="btn primary" disabled={busy || invoiceAmount === ""} onClick={() => void makeInvoice()}>
+            {busy ? "Creating…" : "Create invoice"}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (view === "pay") {
+    return (
+      <div className="screen">
+        <TopBar title="Pay" onBack={() => setView("main")} />
+        <ErrorBanner error={error} />
         {!adminSealed ? (
           <>
-            <p className="muted">
-              Seal the LNbits admin key under your PIN once; it is unsealed per
-              payment and never stored in plain text.
-            </p>
-            <div className="spacer" />
-            <Field label="LNbits admin key">
-              <input type="password" autoComplete="off" value={adminKeyInput} onChange={(e) => setAdminKeyInput(e.target.value)} />
-            </Field>
-            <Field label="PIN">
-              <input type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} />
-            </Field>
-            <button className="primary" disabled={busy} onClick={() => void sealAdminKey()}>
-              Seal admin key
-            </button>
+            <div className="sub" style={{ marginTop: 20 }}>
+              This wallet isn't set up for payments yet. Go back and turn on
+              Instant payments first.
+            </div>
+            <div className="grow" />
           </>
         ) : (
           <>
-            <Field label="bolt11 invoice">
-              <textarea rows={3} value={bolt11ToPay} onChange={(e) => setBolt11ToPay(e.target.value)} spellCheck={false} autoComplete="off" />
-            </Field>
-            <Field label="PIN">
-              <input type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} />
-            </Field>
-            <button className="primary" disabled={busy} onClick={() => void pay()}>
+            <div className="stack" style={{ marginTop: 20 }}>
+              <textarea rows={4} value={bolt11ToPay} onChange={(e) => setBolt11ToPay(e.target.value)} placeholder="Paste a Lightning invoice (lnbc…)" spellCheck={false} autoComplete="off" />
+            </div>
+            <div className="grow" />
+            <button className="btn primary" disabled={busy || bolt11ToPay.trim() === ""} onClick={() => void pay()}>
               {busy ? "Paying…" : "Pay invoice"}
             </button>
           </>
         )}
-      </Card>
-    </>
+      </div>
+    );
+  }
+
+  if (view === "paid") {
+    return (
+      <div className="screen">
+        <div className="grow center">
+          <div className="mark ok" />
+          <div className="h1 big">Paid.</div>
+          <div className="panel pad mono" style={{ fontSize: 11, lineHeight: 1.6, color: "var(--faint)" }}>
+            {proofLine}
+          </div>
+        </div>
+        <button className="btn ghost" onClick={() => setView("main")}>Done</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="screen">
+      <TopBar title="Instant · Lightning" onBack={onHome} />
+      <ErrorBanner error={error} />
+      <div style={{ marginTop: 26 }}>
+        {balanceMsat === null ? (
+          <div className="sub">
+            {!configured
+              ? LNBITS_INSTANCE_URL === ""
+                ? "This build has no Lightning server set."
+                : "One tap to turn on instant payments."
+              : "Couldn't load your balance right now."}
+          </div>
+        ) : (
+          <>
+            <div className="balance-big">{msatToSats(balanceMsat).toLocaleString("en-US")} <span style={{ fontSize: 18, color: "var(--muted)" }}>sats</span></div>
+          </>
+        )}
+      </div>
+      <div className="btn-row" style={{ marginTop: 22 }}>
+        <button className="btn ghost small" disabled={!configured} onClick={() => setView("request")}>Request</button>
+        <button className="btn primary small" disabled={!configured} onClick={() => setView("pay")}>Pay</button>
+      </div>
+      <div className="grow" />
+      {configured ? (
+        <>
+          <div className="statusdot">
+            <i className={balanceMsat === null ? "warn" : ""} />
+            {balanceMsat === null ? "server unreachable" : "connected"}
+          </div>
+          <button className="linklike" onClick={() => void refresh()}>refresh</button>
+        </>
+      ) : (
+        <button className="btn primary" disabled={busy || LNBITS_INSTANCE_URL === ""} onClick={() => void provision()}>
+          {busy ? "Setting up…" : "Turn on Instant payments"}
+        </button>
+      )}
+    </div>
   );
 }

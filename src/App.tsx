@@ -1,17 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import wasmUrl from "../core/pkg/adversarial_core_bg.wasm?url";
 import { initEntropyCore } from "./entropy";
 import type { KeyValueBackend } from "./storage";
 import { preferencesBackend } from "./storage/preferences-backend";
 import { BitcoinScreen } from "./ui/BitcoinScreen";
 import { errorMessage } from "./ui/components";
+import { HomeScreen } from "./ui/HomeScreen";
 import { LightningScreen } from "./ui/LightningScreen";
 import { SafeScreen } from "./ui/SafeScreen";
+import { isUnlocked, subscribe, touch } from "./ui/session-lock";
 import { SettingsScreen } from "./ui/SettingsScreen";
 import { SetupFlow } from "./ui/SetupFlow";
-import { loadConfig, type WalletConfig } from "./ui/wallet-config";
+import { UnlockScreen } from "./ui/UnlockScreen";
+import { loadConfig, saveConfig, type WalletConfig } from "./ui/wallet-config";
 
-type Tab = "bitcoin" | "lightning" | "safe" | "settings";
+export type Route = "home" | "bitcoin" | "lightning" | "savings" | "settings";
 
 const backend: KeyValueBackend = preferencesBackend;
 
@@ -19,7 +22,20 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [fatal, setFatal] = useState<string | null>(null);
   const [config, setConfig] = useState<WalletConfig | null>(null);
-  const [tab, setTab] = useState<Tab>("bitcoin");
+  const [route, setRoute] = useState<Route>("home");
+  const [, forceLockState] = useReducer((x: number) => x + 1, 0);
+
+  useEffect(() => subscribe(forceLockState), []);
+
+  useEffect(() => {
+    const onActivity = () => touch();
+    window.addEventListener("pointerdown", onActivity);
+    window.addEventListener("keydown", onActivity);
+    return () => {
+      window.removeEventListener("pointerdown", onActivity);
+      window.removeEventListener("keydown", onActivity);
+    };
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -34,53 +50,65 @@ export default function App() {
     })();
   }, []);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = config?.theme ?? "dark";
+  }, [config?.theme]);
+
   if (fatal !== null) {
     return (
-      <div className="app">
-        <div className="app-title">Adversarial Wallet</div>
-        <div className="banner error">Startup failed: {fatal}</div>
+      <div className="screen">
+        <div className="grow center">
+          <div className="mark bad" />
+          <div className="h1">Startup failed</div>
+          <div className="banner error">{fatal}</div>
+        </div>
       </div>
     );
   }
   if (!ready || config === null) {
     return (
-      <div className="app">
-        <div className="app-title">Adversarial Wallet</div>
-        <div className="muted">Loading core…</div>
+      <div className="screen">
+        <div className="grow center" style={{ alignItems: "center" }}>
+          <div className="mark" />
+          <div className="sub">Loading…</div>
+        </div>
       </div>
     );
   }
 
   const needsSetup = config.xpub === "";
+  if (needsSetup) {
+    return (
+      <SetupFlow
+        backend={backend}
+        config={config}
+        onComplete={(xpub) => {
+          const next = { ...config, xpub };
+          setConfig(next);
+          // Persist, or onboarding would repeat on the next launch. A failed
+          // save is surfaced, not swallowed — the wallet would be unusable.
+          saveConfig(backend, next).catch((e: unknown) => setFatal(errorMessage(e)));
+        }}
+      />
+    );
+  }
+  if (!isUnlocked()) {
+    return <UnlockScreen backend={backend} />;
+  }
 
-  return (
-    <div className="app">
-      <div className="app-title">Adversarial Wallet</div>
-      {needsSetup && tab !== "settings" ? (
-        <SetupFlow
-          backend={backend}
-          config={config}
-          onComplete={(xpub) => setConfig({ ...config, xpub })}
-        />
-      ) : (
-        <>
-          {tab === "bitcoin" && <BitcoinScreen backend={backend} config={config} />}
-          {tab === "lightning" && <LightningScreen backend={backend} config={config} />}
-          {tab === "safe" && <SafeScreen backend={backend} config={config} />}
-          {tab === "settings" && (
-            <SettingsScreen backend={backend} config={config} onChange={setConfig} />
-          )}
-        </>
-      )}
-      {!needsSetup && (
-        <nav className="tabbar">
-          {(["bitcoin", "lightning", "safe", "settings"] as Tab[]).map((t) => (
-            <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-              {t === "bitcoin" ? "Bitcoin" : t === "lightning" ? "Lightning" : t === "safe" ? "Safe" : "Settings"}
-            </button>
-          ))}
-        </nav>
-      )}
-    </div>
-  );
+  const home = () => setRoute("home");
+  switch (route) {
+    case "bitcoin":
+      return <BitcoinScreen backend={backend} config={config} onHome={home} />;
+    case "lightning":
+      return (
+        <LightningScreen backend={backend} config={config} onConfigChange={setConfig} onHome={home} />
+      );
+    case "savings":
+      return <SafeScreen backend={backend} config={config} onHome={home} />;
+    case "settings":
+      return <SettingsScreen backend={backend} config={config} onChange={setConfig} onHome={home} />;
+    default:
+      return <HomeScreen config={config} go={setRoute} />;
+  }
 }
