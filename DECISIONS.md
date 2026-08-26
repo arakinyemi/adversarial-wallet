@@ -559,6 +559,18 @@ most of the handover documentation. Newest entries at the bottom.
 - Work now committed and pushed in logical blocks per the developer's
   direction (7 backlog commits + this feature as its own commit).
 
+## Session 21 — Lightning hosting decision (2026-08-26)
+
+- **Funded Lightning will run on a pay-per-hour my.lnbits.com instance,
+  created only for the proof runs and the challenge window** (~21 sats/hr,
+  a few dollars total, deleted after). Chosen over: the free public demo
+  server (its operators say not to store funds there — respected; it
+  remains the baked URL for zero-sat UI testing only) and an
+  Oracle-free-VPS self-host (viable at $0 hosting but adds server ops
+  during the challenge week). Swapping `LNBITS_INSTANCE_URL` is the only
+  code change when the paid instance exists; app users still see one-tap
+  setup either way.
+
 ## Session 17 — Cairn redesign from the Claude Design prototype (2026-08-24)
 
 - **UI rebuilt to the designer's prototype:** product name "Cairn", violet
