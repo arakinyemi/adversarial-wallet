@@ -534,6 +534,31 @@ most of the handover documentation. Newest entries at the bottom.
   follow the OS setting — the choice is explicit and stable. Verified in
   the browser across reload and the unlock screen.
 
+## Session 20 — auto fees + fingerprint unlock (2026-08-26)
+
+- **Network fees are now automatic** (developer direction; supersedes the
+  manual fee field). Rate comes from the chain endpoint's `/fee-estimates`
+  (~3-block target, same Esplora server — no new dependency), fee is sized
+  from the real input/output count (P2WPKH vsize, rounded up), and a
+  would-be dust change folds into the fee explicitly. The final fee is
+  still displayed on the confirm screen before signing — the fee-display
+  obligation is unchanged, only authorship moved. Fail-closed: no fallback
+  rate exists; estimation failure, an absurd rate (>1000 sat/vB), or an
+  uncoverable amount refuses with a message. Test-first: 4 new tests
+  (101 total).
+- **Fingerprint unlock added (dependency approved:
+  `@capgo/capacitor-native-biometric` =8.6.7).** The biometric never
+  enters the cryptography: secrets stay encrypted under the PIN, and the
+  fingerprint only releases the PIN from the hardware-backed Android
+  Keystore, after which it flows through the identical decryption check.
+  Opt-in from Settings (prompt-before-store, so a dismissed prompt stores
+  nothing), keypad always remains as fallback, disable deletes the stored
+  credential. Trade recorded: with it enabled, the PIN exists
+  hardware-protected on the device instead of nowhere. USE_BIOMETRIC
+  permission verified in the compiled manifest.
+- Work now committed and pushed in logical blocks per the developer's
+  direction (7 backlog commits + this feature as its own commit).
+
 ## Session 17 — Cairn redesign from the Claude Design prototype (2026-08-24)
 
 - **UI rebuilt to the designer's prototype:** product name "Cairn", violet
