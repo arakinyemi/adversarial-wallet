@@ -7,4 +7,10 @@
 // trust its operator. See DECISIONS.md.
 //
 // Leave empty to disable Lightning in a build (dev builds without a server).
-export const LNBITS_INSTANCE_URL = "";
+//
+// Currently the LNbits team's free public demo server: fine for testing and
+// for this wallet's zero-resting-balance design (sats exist only minutes
+// before being swept), but it is a shared demo — no uptime promise, and it
+// may be reset. Swap for an operator-controlled instance before relying on
+// it.
+export const LNBITS_INSTANCE_URL: string = "https://demo.lnbits.com";
