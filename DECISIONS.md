@@ -431,3 +431,139 @@ most of the handover documentation. Newest entries at the bottom.
   builder could use to rebuild and verify the app.
 - Remaining for release: recorded transaction proofs (PROOFS.md runbook),
   signed APK + published SHA-256, tagged handover commit.
+
+## Session 15 — two-tier entropy (2026-08-24)
+
+- **Mandatory dice replaced with two explicit setup tiers, per the
+  developer's product judgment** ("humans will never roll a die to set up a
+  wallet"): Quick setup (platform CSPRNG only, default — the mainstream
+  wallet baseline) and Advanced setup (the unchanged two-source dice
+  ceremony). Amends CLAUDE.md's entropy rule; the amendment is recorded in
+  CLAUDE.md itself.
+- **Why this is not the Coldcard failure:** that incident's harm came from
+  a SILENT downgrade. Here the tier is a deliberate user choice, the paths
+  are separate functions with no fallback between them, both fail closed
+  internally (the quick tier keeps every health check including the
+  consecutive-draws-differ test), and the post-generation source report
+  makes the tier visible and auditable after the fact.
+- **Test-first:** 4 new quick-tier tests observed red, then green (90
+  total): stuck source refuses, replayed draws refuse, single-source
+  report, runs differ.
+- **The Safe signing-key ceremony got the same choice** (checkbox, default
+  quick).
+- **The challenge wallet still uses the advanced tier** — the pre-funding
+  checklist keeps its dice-backed-seed line; head-typed digits were
+  considered and rejected as theater (XOR means they never hurt, but they
+  defend nothing).
+- Rejected alternative: harvesting touch-timing/sensor jitter as an
+  invisible second source — custom entropy collection is exactly the kind
+  of hand-rolled primitive this project bans.
+
+## Session 16 — session unlock (2026-08-24)
+
+- **Added a session-unlock model** (developer chose it over per-action PIN):
+  the app is locked on cold start, after 2 minutes of inactivity, and
+  whenever it is backgrounded (`visibilitychange` hidden). Unlocking once
+  per session lets Lightning payments and Safe approvals proceed without
+  re-entering the PIN. A "Lock now" control sits in Settings.
+- **What is cached, and why it is acceptable:** only the PIN string, in
+  JS memory, for the session — never a decrypted seed or signer key. Each
+  secret is still unsealed per use and zeroized after. The governing
+  principle is unchanged: a recovered PIN (or even a fully decrypted
+  app-resident secret) still cannot move funds — Bitcoin needs the
+  passphrase, Base needs a second signer, Lightning holds nothing at rest.
+- **The Bitcoin passphrase is explicitly NOT part of this.** It is never
+  cached and is entered on every Bitcoin spend, unchanged. Session unlock
+  only removes the redundant PIN prompt, not the passphrase gate.
+- **Unlock verifies against real ciphertext:** the unlock screen decrypts
+  the stored BTC entropy to check the PIN, so a wrong PIN is rejected at
+  the gate via the same AES-GCM path as everywhere else. Fresh setup starts
+  unlocked (the user just set the PIN), so no immediate re-prompt.
+- **Net effect on residue:** the PIN now lives in memory for up to the
+  inactivity window instead of only the moment of a spend. This is a real
+  but bounded increase, mitigated by background-lock and the 2-minute
+  timeout, and accepted because the PIN is the lowest-value secret in the
+  system. Recorded here as the honest trade for the convenience.
+- **Verified:** 3 new pure unit tests for the lock module (93 total),
+  tsc/lint/build clean, and the lock → gate → wrong-PIN-rejected →
+  correct-PIN-unlocks flow walked in the browser.
+
+## Session 18 — device bug fixes (2026-08-26)
+
+- **Onboarding repeated on every launch — fixed.** Setup completion only
+  updated React state; the xpub was never persisted (saveConfig was only
+  called from Settings), so each launch saw an empty config. Now saved at
+  completion, with a failed save surfaced as a fatal error rather than
+  swallowed. Verified by completing setup in the browser, reloading, and
+  landing on the unlock keypad with the wallet intact.
+- **Balance could refresh forever — fixed twice over.** (1) No network call
+  in the app had a timeout, so a stalled connection hung fetch and the
+  spinner indefinitely; every default fetch now carries a hard
+  AbortSignal.timeout (15s reads, 30s broadcast, 20s LNbits) so a stall
+  becomes a visible error — fail-closed, never fail-silent. (2) The
+  watch-only scan was 40 sequential round trips; it now fetches in
+  concurrent chunks of 10 (~10x faster on high-latency mobile links).
+  Promise.all preserves the all-or-nothing contract; results are processed
+  in index order so gap accounting and address order are unchanged (a
+  chunk may fetch a few public addresses past the stopping point —
+  harmless). One test's expected fetch count updated for chunking.
+
+## Session 19 — zero-config Lightning + light mode (2026-08-26)
+
+- **Lightning is now zero-configuration for app users, per the developer's
+  product direction.** The operator's LNbits server URL is baked in at
+  build time (`src/lightning/instance.ts` — public information, fine in
+  the open repo). On first use, one tap self-provisions a wallet via the
+  server's open account endpoint (`POST /api/v1/account`, no credentials
+  when the server allows new accounts, which the operator's instance must
+  enable). The admin key is sealed under the PIN before anything is saved —
+  a failed seal leaves nothing half-configured. The LNbits section is gone
+  from Settings entirely. Test-first: 4 new createWallet tests (97 total),
+  covering both LNbits response shapes, HTTP refusal, and missing-key
+  refusal.
+- **This makes Instant explicitly custodial:** sats live on the operator's
+  server and app users trust its operator. For the challenge this is the
+  design (zero resting balance; the operator is the user). Stated in the
+  instance file's comment rather than at the user.
+- **Operational note:** at proof time the operator reads the app wallet's
+  keys from their LNbits admin UI for `lightning-proof.ts`; the sweep gate
+  applies to the app's provisioned wallet.
+- **Light mode added:** a second token palette (warm off-white, ink text,
+  darker violet for contrast) stamped as `data-theme` on <html>, chosen in
+  Settings → Appearance and persisted in config. Deliberately does not
+  follow the OS setting — the choice is explicit and stable. Verified in
+  the browser across reload and the unlock screen.
+
+## Session 17 — Cairn redesign from the Claude Design prototype (2026-08-24)
+
+- **UI rebuilt to the designer's prototype:** product name "Cairn", violet
+  accent, editorial dark layout, segmented step progress, on-screen PIN
+  keypad with dots (PINs now exactly 6 digits), pip-face dice buttons with
+  a 50-tick progress bar and undo, tier choice as radio cards, 24 words in
+  a numbered two-column grid marked "Displayed once", one-word-at-a-time
+  backup quiz with a refusal state, the passphrase moment on a darker
+  screen with three plain warnings + an explicit "cannot be recovered"
+  acknowledgment + a hold-to-commit button, and a "wallet is ready" screen
+  showing the entropy sources (PLAN.md's on-screen report moved here).
+- **IA change: tab bar replaced by a home screen** of three accounts —
+  Spending (Bitcoin), Instant (Lightning), Savings (Base 2-of-3) — each
+  labeled with what spending takes ("spends with passphrase / while
+  unlocked / with two devices"). Sub-flows are pushed screens with back
+  arrows; wrong-passphrase and success are full screens, with refusal copy
+  "nothing was signed or sent".
+- **FLAG_SECURE set in MainActivity** — the OS now actually blocks
+  screenshots/recording app-wide, protecting the words screen.
+- **Deviations from the prototype, deliberate:** no "copy words" button
+  (seed → clipboard is exfiltration surface; the 60s-clear promise isn't
+  keepable from a WebView); sats/BTC primary instead of fiat (a price feed
+  is a new network dependency — future ask); no QR codes yet (needs a
+  library — future ask); no PIN keypad on each payment (session unlock was
+  already chosen; the Bitcoin passphrase screen remains per-send); no
+  network toggle on home (switching networks invalidates the stored xpub —
+  stays in Settings).
+- **Verified:** 93 tests green, tsc/lint/build clean; the full create flow
+  walked in a phone-sized browser viewport — keypad PIN set+confirm, quick
+  tier, words, quiz (including a live refusal on a wrong submission),
+  passphrase hold-to-commit, ready, home, and a live testnet scan on the
+  Spending screen. The inactivity auto-lock fired mid-walkthrough and the
+  keypad unlock recovered it — observed working. Test wallet wiped.
