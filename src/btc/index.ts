@@ -14,6 +14,16 @@ export const GAP_LIMIT = 20;
 export const ESPLORA_MAINNET = "https://blockstream.info/api";
 export const ESPLORA_TESTNET = "https://blockstream.info/testnet/api";
 
+/** Addresses fetched concurrently during a scan. */
+const SCAN_CHUNK = 10;
+const FETCH_TIMEOUT_MS = 15_000;
+const BROADCAST_TIMEOUT_MS = 30_000;
+
+// Default fetches carry a hard timeout: a stalled connection must become a
+// visible error, never an indefinite spinner.
+const defaultGet: FetchLike = (url) =>
+  globalThis.fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+
 export class BtcWatchError extends Error {
   constructor(message: string) {
     super(message);
@@ -76,7 +86,7 @@ function requireStats(value: unknown, label: string): StatBlock {
 export async function fetchAddressActivity(
   esploraUrl: string,
   address: string,
-  fetchFn: FetchLike = (url) => globalThis.fetch(url),
+  fetchFn: FetchLike = defaultGet,
 ): Promise<AddressActivity> {
   const response = await fetchFn(`${esploraUrl}/address/${address}`);
   if (!response.ok) {
@@ -125,7 +135,7 @@ const TXID_RE = /^[0-9a-f]{64}$/;
 export async function fetchUtxos(
   esploraUrl: string,
   address: string,
-  fetchFn: FetchLike = (url) => globalThis.fetch(url),
+  fetchFn: FetchLike = defaultGet,
 ): Promise<Utxo[]> {
   const response = await fetchFn(`${esploraUrl}/address/${address}/utxo`);
   if (!response.ok) {
@@ -168,7 +178,8 @@ export async function fetchUtxos(
 export async function broadcastTransaction(
   esploraUrl: string,
   txHex: string,
-  fetchFn: PostFetchLike = (url, init) => globalThis.fetch(url, init),
+  fetchFn: PostFetchLike = (url, init) =>
+    globalThis.fetch(url, { ...init, signal: AbortSignal.timeout(BROADCAST_TIMEOUT_MS) }),
 ): Promise<string> {
   const response = await fetchFn(`${esploraUrl}/tx`, {
     method: "POST",
@@ -185,12 +196,54 @@ export async function broadcastTransaction(
   return text;
 }
 
+/** Confirmation target for automatic fees: within ~3 blocks. */
+const FEE_TARGET_BLOCKS = "3";
+/** Sanity ceiling — an endpoint claiming more than this is refused. */
+const MAX_FEE_RATE = 1_000;
+
+/** Current sat/vB fee rate for the confirmation target, from the same
+ * Esplora endpoint used for balances. No fallback rate exists: estimation
+ * failure refuses the send rather than guessing. */
+export async function fetchFeeRate(
+  esploraUrl: string,
+  fetchFn: FetchLike = defaultGet,
+): Promise<number> {
+  const response = await fetchFn(`${esploraUrl}/fee-estimates`);
+  if (!response.ok) {
+    throw new BtcWatchError(`esplora endpoint returned HTTP ${response.status}`);
+  }
+  const body = (await response.json()) as Record<string, unknown> | null;
+  const rate = body?.[FEE_TARGET_BLOCKS];
+  if (
+    typeof rate !== "number" ||
+    !Number.isFinite(rate) ||
+    rate <= 0 ||
+    rate > MAX_FEE_RATE
+  ) {
+    throw new BtcWatchError("esplora fee estimate is missing or unreasonable");
+  }
+  return rate;
+}
+
+/** Fee for a P2WPKH transaction: vsize ≈ 10.5 + 68·inputs + 31·outputs,
+ * rounded up so the estimate never undershoots the rate. */
+export function estimateFeeSats(
+  inputs: number,
+  outputs: number,
+  satPerVb: number,
+): number {
+  if (inputs < 1 || outputs < 1 || satPerVb <= 0) {
+    throw new BtcWatchError("fee estimation received a degenerate transaction shape");
+  }
+  return Math.ceil((10.5 + 68 * inputs + 31 * outputs) * satPerVb);
+}
+
 /** Scan receive and change chains to the gap limit and sum balances.
  * Throws on any failure — never returns a partial result. */
 export async function scanWatchOnlyBalance(
   params: ScanParams,
 ): Promise<WatchOnlyBalance> {
-  const fetchFn = params.fetchFn ?? ((url: string) => globalThis.fetch(url));
+  const fetchFn = params.fetchFn ?? defaultGet;
   let confirmedSats = 0;
   let pendingSats = 0;
   let addressesScanned = 0;
@@ -198,17 +251,31 @@ export async function scanWatchOnlyBalance(
 
   for (const chain of [0, 1]) {
     let gap = 0;
-    for (let index = 0; gap < GAP_LIMIT; index++) {
-      const address = xpub_to_address_js(params.xpub, params.network, chain, index);
-      const activity = await fetchAddressActivity(params.esploraUrl, address, fetchFn);
-      addressesScanned++;
-      if (activity.txCount > 0) {
-        gap = 0;
-        usedAddresses.push(address);
-        confirmedSats += activity.confirmedSats;
-        pendingSats += activity.pendingSats;
-      } else {
-        gap++;
+    for (let start = 0; gap < GAP_LIMIT; start += SCAN_CHUNK) {
+      // Fetch a chunk concurrently; Promise.all keeps the fail-closed
+      // contract (any failure rejects the whole scan) while cutting the
+      // scan's wall-clock by ~10x on high-latency links. Results are
+      // processed in index order, so gap accounting and address ordering
+      // are identical to a sequential scan (a chunk may fetch a few
+      // addresses past the stopping point; harmless — they are public).
+      const chunk = await Promise.all(
+        Array.from({ length: SCAN_CHUNK }, (_, k) => {
+          const address = xpub_to_address_js(params.xpub, params.network, chain, start + k);
+          return fetchAddressActivity(params.esploraUrl, address, fetchFn).then(
+            (activity) => ({ address, activity }),
+          );
+        }),
+      );
+      for (const { address, activity } of chunk) {
+        addressesScanned++;
+        if (activity.txCount > 0) {
+          gap = 0;
+          usedAddresses.push(address);
+          confirmedSats += activity.confirmedSats;
+          pendingSats += activity.pendingSats;
+        } else {
+          gap++;
+        }
       }
     }
   }

@@ -8,7 +8,9 @@ import init, {
 import {
   broadcastTransaction,
   BtcWatchError,
+  estimateFeeSats,
   fetchAddressActivity,
+  fetchFeeRate,
   fetchUtxos,
   GAP_LIMIT,
   scanWatchOnlyBalance,
@@ -215,6 +217,46 @@ describe("broadcastTransaction fails closed", () => {
   });
 });
 
+describe("automatic fees fail closed", () => {
+  const feeFetch =
+    (body: unknown, ok = true, status = 200): FetchLike =>
+    async () => ({ ok, status, json: async () => body });
+
+  test("reads the 3-block rate from the chain endpoint", async () => {
+    const rate = await fetchFeeRate(ESPLORA, feeFetch({ "1": 12.1, "3": 8.5, "6": 4.2 }));
+    expect(rate).toBe(8.5);
+  });
+
+  test("HTTP errors, missing targets, and absurd rates refuse — no fallback rate exists", async () => {
+    const bads: FetchLike[] = [
+      feeFetch({}, false, 502),
+      feeFetch({}),
+      feeFetch({ "1": 12 }),
+      feeFetch({ "3": "8.5" }),
+      feeFetch({ "3": -1 }),
+      feeFetch({ "3": 0 }),
+      feeFetch({ "3": 5_000 }),
+      feeFetch(null),
+    ];
+    for (const bad of bads) {
+      await expect(fetchFeeRate(ESPLORA, bad)).rejects.toThrow(BtcWatchError);
+    }
+  });
+
+  test("fee scales with transaction size and never rounds down", () => {
+    // 1 input, 2 outputs at 1 sat/vB: 10.5 + 68 + 62 = 140.5 → 141 sats
+    expect(estimateFeeSats(1, 2, 1)).toBe(141);
+    expect(estimateFeeSats(2, 2, 10)).toBe(2085);
+    expect(estimateFeeSats(1, 1, 1)).toBe(110);
+  });
+
+  test("degenerate inputs to the estimator refuse", () => {
+    expect(() => estimateFeeSats(0, 2, 1)).toThrow(BtcWatchError);
+    expect(() => estimateFeeSats(1, 0, 1)).toThrow(BtcWatchError);
+    expect(() => estimateFeeSats(1, 2, 0)).toThrow(BtcWatchError);
+  });
+});
+
 describe("scanWatchOnlyBalance", () => {
   test("no activity scans exactly the gap limit on both chains and reports zero", async () => {
     const { fetchFn, requested } = mockEsplora({});
@@ -252,9 +294,10 @@ describe("scanWatchOnlyBalance", () => {
     expect(balance.confirmedSats).toBe(6_000 + 2_000 + 1_000);
     expect(balance.pendingSats).toBe(500);
     expect(balance.usedAddresses).toEqual([receive(0), receive(5), change(2)]);
-    // receive chain: used index 5 → scan reaches 5 + GAP_LIMIT + 1 addresses;
-    // change chain: used index 2 → 2 + GAP_LIMIT + 1.
-    expect(requested).toHaveLength(5 + GAP_LIMIT + 1 + (2 + GAP_LIMIT + 1));
+    // Chunked scanning (10 per chunk): each chain fetches whole chunks until
+    // the gap limit is crossed inside one — used index 5 (receive) and 2
+    // (change) both stop after the third chunk, 30 fetches per chain.
+    expect(requested).toHaveLength(60);
   });
 
   test("passphrase-gated signing works through the boundary and refuses a wrong passphrase", () => {
