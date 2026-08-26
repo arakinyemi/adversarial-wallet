@@ -4,6 +4,7 @@ import { combine_entropy_js } from "../../core/pkg/adversarial_core";
 import {
   drawPlatformEntropy,
   EntropyError,
+  generateQuickSeedEntropy,
   generateSeedEntropy,
   initEntropyCore,
   MIN_DICE_ROLLS,
@@ -101,6 +102,39 @@ describe("dice source fails closed (via the Rust core)", () => {
         generateSeedEntropy(FIFTY_ROLLS.slice(0, 49) + bad),
       ).toThrow(/1-6/);
     }
+  });
+});
+
+describe("quick tier (single source) fails closed identically", () => {
+  test("a stuck platform source refuses", () => {
+    const stuck: PlatformCrypto = {
+      getRandomValues: (buf) => (buf.fill(0x42), buf),
+    };
+    expect(() => generateQuickSeedEntropy(stuck)).toThrow(EntropyError);
+  });
+
+  test("two identical consecutive draws refuse", () => {
+    const replay: PlatformCrypto = {
+      getRandomValues: (buf) => {
+        for (let i = 0; i < buf.length; i++) buf[i] = i;
+        return buf;
+      },
+    };
+    expect(() => generateQuickSeedEntropy(replay)).toThrow(EntropyError);
+  });
+
+  test("healthy source produces 32 bytes and a single-source report", () => {
+    const { entropy, report } = generateQuickSeedEntropy();
+    expect(entropy.byteLength).toBe(PLATFORM_ENTROPY_BYTES);
+    expect(report.sources).toHaveLength(1);
+    expect(report.sources[0]!.name).toBe("crypto.getRandomValues");
+    expect(report.sources[0]!.bytes).toBe(PLATFORM_ENTROPY_BYTES);
+  });
+
+  test("two runs produce different entropy", () => {
+    expect(toHex(generateQuickSeedEntropy().entropy)).not.toBe(
+      toHex(generateQuickSeedEntropy().entropy),
+    );
   });
 });
 

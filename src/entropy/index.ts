@@ -79,6 +79,32 @@ export function drawPlatformEntropy(
   return filled;
 }
 
+/** Quick tier: platform CSPRNG only, explicitly chosen by the user — the
+ * default mainstream setup. NOT a fallback: no code path routes here from
+ * the two-source flow, and the same health checks apply (per-draw checks
+ * plus consecutive draws must differ). The source report makes the tier
+ * visible after generation. */
+export function generateQuickSeedEntropy(
+  cryptoObj: PlatformCrypto | undefined = globalThis.crypto,
+): SeedEntropyResult {
+  const first = drawPlatformEntropy(cryptoObj);
+  const second = drawPlatformEntropy(cryptoObj);
+  const replayed = first.every((b, i) => b === second[i]);
+  first.fill(0);
+  if (replayed) {
+    second.fill(0);
+    throw new EntropyError(
+      "platform CSPRNG failed health check: consecutive draws identical",
+    );
+  }
+  return {
+    entropy: second,
+    report: {
+      sources: [{ name: "crypto.getRandomValues", bytes: PLATFORM_ENTROPY_BYTES }],
+    },
+  };
+}
+
 /** Full two-source flow. Returns entropy only if BOTH sources are healthy;
  * any failure in either source throws with nothing produced. */
 export function generateSeedEntropy(
