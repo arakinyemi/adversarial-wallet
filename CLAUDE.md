@@ -36,6 +36,8 @@ Do not introduce a native Android Rust core or FFI bindings. That decision was m
 
 **Entropy fails closed.** Any source that throws, returns short, or fails its health check aborts seed generation with a visible error. No fallback, no default value, no catch-and-continue. The Coldcard bug was a config check that tested whether a setting existed rather than whether it was enabled, so seed generation silently dropped to a weak generator with no error and no visible difference to the user. Do not create any code path where a missing or failed source still produces a seed.
 
+*Amended 2026-08-24 (see DECISIONS.md session 15):* seed generation has two explicitly user-chosen tiers — quick (platform CSPRNG only) and advanced (the two-source dice ceremony). Each tier fails closed internally; there is no fallback between tiers, and the on-screen source report shows which tier produced a seed. The dice requirement (≥50 rolls, refuse below) applies within the advanced tier. The challenge wallet itself is created with the advanced tier per the pre-funding checklist.
+
 **Never log, print, or serialise key material.** No seeds, private keys, extended keys, passphrases, or PINs in console output, logs, exceptions, stack traces, or error messages. This includes truncated or "safe" prefixes.
 
 **The Bitcoin passphrase is never persisted.** Not to localStorage, IndexedDB, Capacitor Preferences, session state, or any cache. It is entered per transaction, held in memory for the duration of signing, and discarded. Any code that stores it, even temporarily for convenience, defeats the entire Bitcoin component.

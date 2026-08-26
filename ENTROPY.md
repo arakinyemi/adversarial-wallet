@@ -3,7 +3,21 @@
 How this wallet generates the randomness behind every Bitcoin seed and Base
 signer key.
 
-## Two sources, combined
+## Two setup tiers
+
+At wallet creation the user explicitly chooses:
+
+- **Quick setup** (default): 32 bytes from the platform CSPRNG, with the
+  health checks below. This is the same entropy basis as mainstream wallets.
+- **Advanced setup**: the two-source ceremony described next, mixing in
+  physical dice.
+
+The tiers are separate code paths — nothing falls back from one to the
+other — and the post-generation source report shows exactly which sources
+contributed, so the tier a wallet was created with is visible, not
+inferred.
+
+## Two sources, combined (advanced tier)
 
 1. **Platform CSPRNG** — 32 bytes from `crypto.getRandomValues()`.
 2. **User dice** — the user rolls a physical die at least 50 times and
