@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   assertSweptToZero,
   createInvoice,
+  createWallet,
   fetchPaymentProof,
   getBalanceMsat,
   LightningError,
@@ -168,6 +169,42 @@ describe("balance and the sweep gate", () => {
     await expect(assertSweptToZero(config(nonzero.fetchFn))).rejects.toThrow(
       /not zero/,
     );
+  });
+});
+
+describe("createWallet (self-provisioning)", () => {
+  const KEYS = { adminkey: "a1".repeat(16), inkey: "b2".repeat(16) };
+
+  test("provisions against the account endpoint and returns both keys", async () => {
+    const { calls, fetchFn } = mockLnbits(() => ({ body: { id: "w1", name: "cairn", ...KEYS } }));
+    const wallet = await createWallet(BASE, fetchFn);
+    expect(wallet).toEqual({ adminKey: KEYS.adminkey, invoiceKey: KEYS.inkey });
+    expect(calls[0]!.url).toBe(`${BASE}/api/v1/account`);
+    expect(calls[0]!.method).toBe("POST");
+  });
+
+  test("accepts the nested wallets shape from newer LNbits", async () => {
+    const { fetchFn } = mockLnbits(() => ({ body: { id: "u1", wallets: [{ ...KEYS }] } }));
+    const wallet = await createWallet(BASE, fetchFn);
+    expect(wallet.adminKey).toBe(KEYS.adminkey);
+  });
+
+  test("HTTP errors and responses missing either key refuse", async () => {
+    for (const responder of [
+      () => ({ status: 403, body: { detail: "new accounts disabled" } }),
+      () => ({ body: {} }),
+      () => ({ body: { adminkey: KEYS.adminkey } }),
+      () => ({ body: { wallets: [] } }),
+    ]) {
+      const { fetchFn } = mockLnbits(responder as (c: Call) => { status?: number; body: unknown });
+      await expect(createWallet(BASE, fetchFn)).rejects.toThrow(LightningError);
+    }
+  });
+
+  test("an empty base url refuses before any network call", async () => {
+    const { calls, fetchFn } = mockLnbits(() => ({ body: {} }));
+    await expect(createWallet("", fetchFn)).rejects.toThrow(LightningError);
+    expect(calls).toHaveLength(0);
   });
 });
 

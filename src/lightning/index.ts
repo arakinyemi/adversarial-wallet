@@ -65,7 +65,9 @@ async function request(
   requireConfig(config);
   const fetchFn =
     config.fetchFn ??
-    ((url: string, init: Parameters<LnFetchLike>[1]) => globalThis.fetch(url, init));
+    ((url: string, init: Parameters<LnFetchLike>[1]) =>
+      // Hard timeout: a stalled connection must surface as an error.
+      globalThis.fetch(url, { ...init, signal: AbortSignal.timeout(20_000) }));
   const response = await fetchFn(`${config.baseUrl}${path}`, {
     method,
     headers: {
@@ -175,6 +177,48 @@ export async function fetchPaymentProof(
     );
   }
   return { paymentHash: expectedHash, preimage };
+}
+
+export interface ProvisionedWallet {
+  adminKey: string;
+  invoiceKey: string;
+}
+
+/** Create a fresh wallet on the operator's LNbits server (its open account
+ * endpoint; no credentials required when the server allows new accounts).
+ * Both keys must come back or the provisioning refuses — a wallet that can
+ * receive but never pay is not a wallet. */
+export async function createWallet(
+  baseUrl: string,
+  fetchFn: LnFetchLike = (url, init) =>
+    globalThis.fetch(url, { ...init, signal: AbortSignal.timeout(20_000) }),
+): Promise<ProvisionedWallet> {
+  if (baseUrl === "") {
+    throw new LightningError("lightning server url is required");
+  }
+  const response = await fetchFn(`${baseUrl}/api/v1/account`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "cairn" }),
+  });
+  const parsed = (await response.json().catch(() => null)) as {
+    adminkey?: unknown;
+    inkey?: unknown;
+    wallets?: { adminkey?: unknown; inkey?: unknown }[];
+    detail?: unknown;
+  } | null;
+  if (!response.ok) {
+    const detail = typeof parsed?.detail === "string" ? `: ${parsed.detail}` : "";
+    throw new LightningError(`lnbits returned HTTP ${response.status}${detail}`);
+  }
+  // Older LNbits returns keys top-level; newer nests them under wallets[].
+  const source = Array.isArray(parsed?.wallets) ? parsed?.wallets[0] : parsed;
+  const adminKey = source?.adminkey;
+  const invoiceKey = source?.inkey;
+  if (typeof adminKey !== "string" || adminKey === "" || typeof invoiceKey !== "string" || invoiceKey === "") {
+    throw new LightningError("lnbits account response is missing wallet keys");
+  }
+  return { adminKey, invoiceKey };
 }
 
 /** Wallet balance in millisats. */
