@@ -49,7 +49,11 @@ export function UnlockScreen({
       // A dismissed prompt is not an error worth shouting about; other
       // failures are shown and the keypad is right there.
       const message = errorMessage(e);
-      if (!/cancel/i.test(message)) setError(message);
+      if (/credential/i.test(message)) {
+        setError("Fingerprint needs to be set up again — unlock with your PIN, then re-enable it in Settings.");
+      } else if (!/cancel/i.test(message)) {
+        setError(message);
+      }
     }
   };
 
