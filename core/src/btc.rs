@@ -33,6 +33,7 @@ pub enum BtcError {
     EntropyWrongLength { got: usize },
     InvalidMnemonic,
     InvalidXpub,
+    XpubNetworkMismatch,
     InvalidNetwork,
     InvalidAddressIndex,
     Derivation,
@@ -55,6 +56,9 @@ impl core::fmt::Display for BtcError {
             ),
             BtcError::InvalidMnemonic => write!(f, "invalid mnemonic"),
             BtcError::InvalidXpub => write!(f, "invalid extended public key"),
+            BtcError::XpubNetworkMismatch => {
+                write!(f, "this wallet was created for a different network")
+            }
             BtcError::InvalidNetwork => write!(f, "network must be \"mainnet\" or \"testnet\""),
             BtcError::InvalidAddressIndex => write!(f, "address index out of range"),
             BtcError::Derivation => write!(f, "key derivation failed"),
@@ -182,7 +186,7 @@ pub fn xpub_to_address(
     let network = parse_network(network)?;
     let parsed: Xpub = xpub.parse().map_err(|_| BtcError::InvalidXpub)?;
     if parsed.network != bitcoin::NetworkKind::from(network) {
-        return Err(BtcError::InvalidNetwork);
+        return Err(BtcError::XpubNetworkMismatch);
     }
     if chain > 1 {
         // BIP84 has exactly two chains: 0 receive, 1 change.
@@ -591,12 +595,12 @@ mod tests {
         let tpub = account_xpub(BIP84_MNEMONIC, "", "testnet").unwrap();
         assert_eq!(
             xpub_to_address(&tpub, "mainnet", 0, 0),
-            Err(BtcError::InvalidNetwork)
+            Err(BtcError::XpubNetworkMismatch)
         );
         let xpub = account_xpub(BIP84_MNEMONIC, "", "mainnet").unwrap();
         assert_eq!(
             xpub_to_address(&xpub, "testnet", 0, 0),
-            Err(BtcError::InvalidNetwork)
+            Err(BtcError::XpubNetworkMismatch)
         );
     }
 

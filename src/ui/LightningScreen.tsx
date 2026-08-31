@@ -2,7 +2,7 @@
 // unsealed per payment while the session is unlocked. Settled payments show
 // the locally verified preimage as proof.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createInvoice,
   createWallet,
@@ -63,6 +63,16 @@ export function LightningScreen({
     void refresh();
     void hasSecret(backend, LNBITS_ADMIN_KEY).then(setAdminSealed);
   }, [refresh, backend]);
+
+  // Instant payments set themselves up: no button, no configuration. The
+  // wallet self-provisions on first visit; a failure shows a retry.
+  const provisioning = useRef(false);
+  useEffect(() => {
+    if (configured || LNBITS_INSTANCE_URL === "" || provisioning.current) return;
+    if (getSessionPin() === null) return;
+    provisioning.current = true;
+    void provision();
+  }, [configured]);
 
   const makeInvoice = async () => {
     setError(null);
@@ -223,8 +233,12 @@ export function LightningScreen({
           <div className="sub">
             {!configured
               ? LNBITS_INSTANCE_URL === ""
-                ? "This build has no Lightning server set."
-                : "One tap to turn on instant payments."
+                ? "Instant payments are not available in this build."
+                : busy
+                  ? "Setting up instant payments…"
+                  : error !== null
+                    ? "Setup didn't finish — tap retry below."
+                    : "Setting up instant payments…"
               : "Couldn't load your balance right now."}
           </div>
         ) : (
@@ -247,9 +261,12 @@ export function LightningScreen({
           <button className="linklike" onClick={() => void refresh()}>refresh</button>
         </>
       ) : (
-        <button className="btn primary" disabled={busy || LNBITS_INSTANCE_URL === ""} onClick={() => void provision()}>
-          {busy ? "Setting up…" : "Turn on Instant payments"}
-        </button>
+        error !== null &&
+        LNBITS_INSTANCE_URL !== "" && (
+          <button className="btn primary" disabled={busy} onClick={() => void provision()}>
+            Retry setup
+          </button>
+        )
       )}
     </div>
   );

@@ -80,20 +80,6 @@ export function SettingsScreen({
       <div className="spacer" />
       <ErrorBanner error={error} />
       <SuccessBanner message={saved} />
-      <Card title="Network">
-        <Field label="Bitcoin network" hint="Also selects Base vs Base Sepolia.">
-          <select
-            value={draft.network}
-            onChange={(e) => set("network", e.target.value as WalletConfig["network"])}
-          >
-            <option value="testnet">testnet</option>
-            <option value="mainnet">mainnet</option>
-          </select>
-        </Field>
-        <Field label="Esplora endpoint">
-          <input value={draft.esploraUrl} onChange={(e) => set("esploraUrl", e.target.value)} spellCheck={false} />
-        </Field>
-      </Card>
       <Card title="Appearance">
         <Field label="Theme">
           <select
