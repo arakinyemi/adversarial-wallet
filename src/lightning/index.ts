@@ -52,7 +52,7 @@ const HASH_RE = /^[0-9a-f]{64}$/;
 
 function requireConfig(config: LnbitsConfig): void {
   if (config.baseUrl === "" || config.apiKey === "") {
-    throw new LightningError("lnbits base url and api key are required");
+    throw new LightningError("Lightning is not set up yet.");
   }
 }
 
@@ -84,7 +84,7 @@ async function request(
         : "";
     // Never include the api key or request headers here.
     throw new LightningError(
-      `lnbits returned HTTP ${response.status}${detail ? `: ${detail}` : ""}`,
+      `The Lightning service returned an error${detail ? `: ${detail}` : ` (HTTP ${response.status})`}.`,
     );
   }
   return parsed;
@@ -92,7 +92,7 @@ async function request(
 
 function requirePaymentHash(value: unknown): string {
   if (typeof value !== "string" || !HASH_RE.test(value)) {
-    throw new LightningError("lnbits response has a malformed payment hash");
+    throw new LightningError("The Lightning service sent an invalid payment reference.");
   }
   return value;
 }
@@ -114,7 +114,7 @@ export async function createInvoice(
   const paymentHash = requirePaymentHash(body?.payment_hash);
   const bolt11 = body?.bolt11 ?? body?.payment_request;
   if (typeof bolt11 !== "string" || !bolt11.toLowerCase().startsWith("ln")) {
-    throw new LightningError("lnbits response has a malformed invoice");
+    throw new LightningError("The Lightning service sent an invalid invoice.");
   }
   return { bolt11, paymentHash };
 }
@@ -157,7 +157,7 @@ export async function fetchPaymentProof(
     `/api/v1/payments/${expectedHash}`,
   )) as { paid?: unknown; preimage?: unknown } | null;
   if (typeof body?.paid !== "boolean") {
-    throw new LightningError("lnbits payment status response is malformed");
+    throw new LightningError("The Lightning service sent an unreadable payment status.");
   }
   if (!body.paid) {
     return null;
@@ -165,7 +165,7 @@ export async function fetchPaymentProof(
   const preimage = body.preimage;
   if (typeof preimage !== "string" || !HASH_RE.test(preimage)) {
     throw new LightningError(
-      "lnbits reports the payment settled but supplied no valid preimage",
+      "The payment shows as settled but its preimage receipt is missing.",
     );
   }
   const digest = new Uint8Array(
@@ -194,7 +194,7 @@ export async function createWallet(
     globalThis.fetch(url, { ...init, signal: AbortSignal.timeout(20_000) }),
 ): Promise<ProvisionedWallet> {
   if (baseUrl === "") {
-    throw new LightningError("lightning server url is required");
+    throw new LightningError("Lightning is not available in this build.");
   }
   const response = await fetchFn(`${baseUrl}/api/v1/account`, {
     method: "POST",
@@ -216,7 +216,7 @@ export async function createWallet(
   const adminKey = source?.adminkey;
   const invoiceKey = source?.inkey;
   if (typeof adminKey !== "string" || adminKey === "" || typeof invoiceKey !== "string" || invoiceKey === "") {
-    throw new LightningError("lnbits account response is missing wallet keys");
+    throw new LightningError("The Lightning service could not create a wallet.");
   }
   return { adminKey, invoiceKey };
 }
@@ -228,7 +228,7 @@ export async function getBalanceMsat(config: LnbitsConfig): Promise<number> {
   } | null;
   const balance = body?.balance;
   if (typeof balance !== "number" || !Number.isSafeInteger(balance) || balance < 0) {
-    throw new LightningError("lnbits wallet response has a malformed balance");
+    throw new LightningError("The Lightning service sent an unreadable balance.");
   }
   return balance;
 }

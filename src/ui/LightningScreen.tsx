@@ -14,7 +14,7 @@ import {
 import { LNBITS_INSTANCE_URL } from "../lightning/instance";
 import { hasSecret, openSecret, sealSecret, type KeyValueBackend } from "../storage";
 import { ErrorBanner, TopBar, errorMessage } from "./components";
-import { msatToSats, truncateMiddle } from "./format";
+import { msatToSats } from "./format";
 import { getSessionPin } from "./session-lock";
 import { saveConfig, type WalletConfig } from "./wallet-config";
 
@@ -128,8 +128,8 @@ export function LightningScreen({
         const proof = await fetchPaymentProof(payConfig, paymentHash);
         setProofLine(
           proof !== null
-            ? `preimage ${truncateMiddle(proof.preimage, 12)} · verified`
-            : `in flight · ${truncateMiddle(paymentHash, 12)}`,
+            ? "payment receipt verified"
+            : "payment on its way — receipt pending",
         );
         setBolt11ToPay("");
         setView("paid");
@@ -197,7 +197,7 @@ export function LightningScreen({
         ) : (
           <>
             <div className="stack" style={{ marginTop: 20 }}>
-              <textarea rows={4} value={bolt11ToPay} onChange={(e) => setBolt11ToPay(e.target.value)} placeholder="Paste a Lightning invoice (lnbc…)" spellCheck={false} autoComplete="off" />
+              <textarea rows={4} value={bolt11ToPay} onChange={(e) => setBolt11ToPay(e.target.value)} placeholder="Paste a Lightning invoice" spellCheck={false} autoComplete="off" />
             </div>
             <div className="grow" />
             <button className="btn primary" disabled={busy || bolt11ToPay.trim() === ""} onClick={() => void pay()}>

@@ -105,7 +105,7 @@ export function SafeScreen({
         config.safeAddress,
         config.safeOwners as unknown as readonly [string, string, string],
       );
-      setVerifiedLine(`${result.owners.length} owners · ${result.threshold} approvals ✓`);
+      setVerifiedLine(`${result.owners.length} keys · ${result.threshold} approvals ✓`);
       setBalance(formatEther(await client.getBalance({ address: getAddress(config.safeAddress) })));
     } catch (e) {
       setError(errorMessage(e));
@@ -285,7 +285,7 @@ export function SafeScreen({
   const owners = config.safeOwners;
   return (
     <div className="screen">
-      <TopBar title="Savings · Base" onBack={onHome} />
+      <TopBar title="Savings" onBack={onHome} />
       <ErrorBanner error={error} />
       <div style={{ marginTop: 26 }}>
         {config.safeAddress === "" ? (
@@ -293,7 +293,8 @@ export function SafeScreen({
         ) : (
           <>
             <div className="balance-big">{balance ?? "—"} <span style={{ fontSize: 18, color: "var(--muted)" }}>ETH</span></div>
-            <div className="balance-sub"><span>2-of-3 · {truncateMiddle(config.safeAddress, 8)}</span></div>
+            <div className="balance-sub"><span>Protected by 3 keys · 2 must approve</span></div>
+            <div className="faint mono" style={{ marginTop: 4 }}>{truncateMiddle(config.safeAddress, 10)}</div>
           </>
         )}
       </div>
@@ -309,7 +310,7 @@ export function SafeScreen({
       )}
       {config.safeAddress !== "" && (
         <button className="panel" style={{ marginTop: 12, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", cursor: "pointer", width: "100%" }} onClick={() => void verify()}>
-          <span style={{ font: "600 13px var(--font)", color: "var(--text)" }}>Verify on chain</span>
+          <span style={{ font: "600 13px var(--font)", color: "var(--text)" }}>Check account security</span>
           <span className="mono" style={{ fontSize: 12, color: verifiedLine !== null ? "var(--success)" : "var(--faint)" }}>
             {busy ? "checking…" : verifiedLine ?? "tap to check"}
           </span>

@@ -76,7 +76,7 @@ function requireStats(value: unknown, label: string): StatBlock {
   const txCount = v?.tx_count;
   for (const n of [funded, spent, txCount]) {
     if (typeof n !== "number" || !Number.isSafeInteger(n) || n < 0) {
-      throw new BtcWatchError(`esplora response has malformed ${label}`);
+      throw new BtcWatchError(`The balance service sent malformed data (${label}).`);
     }
   }
   return { funded: funded as number, spent: spent as number, txCount: txCount as number };
@@ -90,23 +90,23 @@ export async function fetchAddressActivity(
 ): Promise<AddressActivity> {
   const response = await fetchFn(`${esploraUrl}/address/${address}`);
   if (!response.ok) {
-    throw new BtcWatchError(`esplora endpoint returned HTTP ${response.status}`);
+    throw new BtcWatchError(`The balance service returned an error (HTTP ${response.status}).`);
   }
   const body = (await response.json()) as
     | { address?: unknown; chain_stats?: unknown; mempool_stats?: unknown }
     | null;
   if (body === null || typeof body !== "object") {
-    throw new BtcWatchError("esplora response is not an object");
+    throw new BtcWatchError("The balance service sent an unreadable response.");
   }
   if (body.address !== address) {
-    throw new BtcWatchError("esplora response is for a different address");
+    throw new BtcWatchError("The balance service answered for a different address.");
   }
   const chain = requireStats(body.chain_stats, "chain_stats");
   const mempool = requireStats(body.mempool_stats, "mempool_stats");
   const confirmedSats = chain.funded - chain.spent;
   if (confirmedSats < 0) {
     // On-chain spent can never exceed on-chain funded for an address.
-    throw new BtcWatchError("esplora response is internally inconsistent");
+    throw new BtcWatchError("The balance service sent inconsistent data.");
   }
   return {
     address,
@@ -139,11 +139,11 @@ export async function fetchUtxos(
 ): Promise<Utxo[]> {
   const response = await fetchFn(`${esploraUrl}/address/${address}/utxo`);
   if (!response.ok) {
-    throw new BtcWatchError(`esplora endpoint returned HTTP ${response.status}`);
+    throw new BtcWatchError(`The balance service returned an error (HTTP ${response.status}).`);
   }
   const body = await response.json();
   if (!Array.isArray(body)) {
-    throw new BtcWatchError("esplora utxo response is not an array");
+    throw new BtcWatchError("The balance service sent an unreadable coin list.");
   }
   return body.map((entry: unknown): Utxo => {
     const u = entry as {
@@ -167,7 +167,7 @@ export async function fetchUtxos(
       value <= 0 ||
       typeof confirmed !== "boolean"
     ) {
-      throw new BtcWatchError("esplora utxo response has a malformed entry");
+      throw new BtcWatchError("The balance service sent a malformed coin entry.");
     }
     return { txid, vout, valueSats: value, confirmed };
   });
@@ -188,10 +188,10 @@ export async function broadcastTransaction(
   const text = (await response.text()).trim();
   if (!response.ok) {
     // Esplora puts the node's rejection reason in the body; surface it.
-    throw new BtcWatchError(`broadcast failed with HTTP ${response.status}: ${text}`);
+    throw new BtcWatchError(`The Bitcoin network rejected this payment: ${text}`);
   }
   if (!TXID_RE.test(text)) {
-    throw new BtcWatchError("broadcast response is not a txid; success is unproven");
+    throw new BtcWatchError("The payment may not have gone through — no confirmation was received.");
   }
   return text;
 }
@@ -210,7 +210,7 @@ export async function fetchFeeRate(
 ): Promise<number> {
   const response = await fetchFn(`${esploraUrl}/fee-estimates`);
   if (!response.ok) {
-    throw new BtcWatchError(`esplora endpoint returned HTTP ${response.status}`);
+    throw new BtcWatchError(`The balance service returned an error (HTTP ${response.status}).`);
   }
   const body = (await response.json()) as Record<string, unknown> | null;
   const rate = body?.[FEE_TARGET_BLOCKS];
@@ -220,7 +220,7 @@ export async function fetchFeeRate(
     rate <= 0 ||
     rate > MAX_FEE_RATE
   ) {
-    throw new BtcWatchError("esplora fee estimate is missing or unreasonable");
+    throw new BtcWatchError("Could not get a reliable network fee right now.");
   }
   return rate;
 }

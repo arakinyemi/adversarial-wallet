@@ -91,11 +91,11 @@ export function SettingsScreen({
           </select>
         </Field>
       </Card>
-      <Card title="Safe on Base">
-        <Field label="Safe address">
+      <Card title="Savings account">
+        <Field label="Account address">
           <input value={draft.safeAddress} onChange={(e) => set("safeAddress", e.target.value)} spellCheck={false} />
         </Field>
-        <Field label="Expected owners (one per line, exactly three)">
+        <Field label="Owner key addresses (one per line, exactly three)">
           <textarea rows={3} value={owners} onChange={(e) => setOwners(e.target.value)} spellCheck={false} />
         </Field>
       </Card>

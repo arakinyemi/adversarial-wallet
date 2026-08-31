@@ -267,12 +267,12 @@ export function SetupFlow({
             <div className="micro" style={{ textAlign: "center", marginTop: 8 }}>
               Bitcoin · Lightning · Savings
             </div>
-            <button
-              className="linklike"
-              onClick={toggleNetwork}
-              style={{ marginTop: 4 }}
-            >
-              network: <span className="mono" style={{ color: config.network === "mainnet" ? "var(--accent)" : "var(--amber)" }}>{config.network}</span> · tap to switch
+            <button className="linklike" onClick={toggleNetwork} style={{ marginTop: 4 }}>
+              {config.network === "testnet" ? (
+                <span style={{ color: "var(--amber)" }}>USING TEST COINS — tap for real Bitcoin</span>
+              ) : (
+                "test mode"
+              )}
             </button>
           </div>
         </>

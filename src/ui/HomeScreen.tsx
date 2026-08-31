@@ -74,7 +74,9 @@ export function HomeScreen({
           <span className="nm">Aegis</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span className="micro">{config.network}</span>
+          {config.network === "testnet" && (
+            <span className="micro" style={{ color: "var(--amber)" }}>test mode</span>
+          )}
           <button className="gear" onClick={() => go("settings")} aria-label="Settings">⚙</button>
         </div>
       </div>
@@ -109,7 +111,7 @@ export function HomeScreen({
               {sav.state === "ok" ? `${sav.eth} ETH` : sav.state === "loading" ? "…" : sav.state === "error" ? "unavailable" : ""}
             </span>
           </span>
-          <span className="sub2">Base · 2-of-3{sav.state === "off" ? " · not set up" : ""}</span>
+          <span className="sub2">Two-device protected{sav.state === "off" ? " · not set up" : ""}</span>
           <span className="chip">spends with two devices</span>
         </button>
       </div>

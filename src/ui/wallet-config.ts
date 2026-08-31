@@ -22,10 +22,10 @@ export interface WalletConfig {
 }
 
 export const DEFAULT_CONFIG: WalletConfig = {
-  network: "testnet",
+  network: "mainnet",
   theme: "dark",
   biometricUnlock: false,
-  esploraUrl: "https://blockstream.info/testnet/api",
+  esploraUrl: "https://blockstream.info/api",
   xpub: "",
   lnbitsUrl: "",
   lnbitsInvoiceKey: "",
