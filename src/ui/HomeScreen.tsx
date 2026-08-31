@@ -9,7 +9,8 @@ import { base, baseSepolia } from "viem/chains";
 import type { Route } from "../App";
 import { scanWatchOnlyBalance } from "../btc";
 import { getBalanceMsat } from "../lightning";
-import { formatSats, msatToSats, satsToBtc } from "./format";
+import { fetchUsdPrices, type UsdPrices } from "../prices";
+import { formatSats, msatToSats, satsToBtc, satsToUsd } from "./format";
 import type { WalletConfig } from "./wallet-config";
 
 type Load = { state: "loading" } | { state: "ok"; value: number } | { state: "error" } | { state: "off" };
@@ -28,9 +29,14 @@ export function HomeScreen({
   const [sav, setSav] = useState<{ state: "loading" | "error" | "off" } | { state: "ok"; eth: string }>(
     config.safeAddress !== "" ? { state: "loading" } : { state: "off" },
   );
+  const [prices, setPrices] = useState<UsdPrices | null>(null);
 
   useEffect(() => {
     let alive = true;
+    // Display sugar only: a price failure silently falls back to sats.
+    void fetchUsdPrices()
+      .then((usd) => { if (alive) setPrices(usd); })
+      .catch(() => {});
     void scanWatchOnlyBalance({
       esploraUrl: config.esploraUrl,
       xpub: config.xpub,
@@ -64,7 +70,17 @@ export function HomeScreen({
     : null;
 
   const amountOf = (l: Load): string =>
-    l.state === "ok" ? formatSats(l.value) : l.state === "loading" ? "…" : l.state === "error" ? "unavailable" : "";
+    l.state === "ok"
+      ? prices !== null
+        ? satsToUsd(l.value, prices.btcUsd)
+        : formatSats(l.value)
+      : l.state === "loading" ? "…" : l.state === "error" ? "unavailable" : "";
+
+  const grandUsd =
+    prices !== null && totalSats !== null && sav.state !== "loading" && sav.state !== "error"
+      ? (totalSats / 100_000_000) * prices.btcUsd +
+        (sav.state === "ok" ? parseFloat(sav.eth) * prices.ethUsd : 0)
+      : null;
 
   return (
     <div className="screen">
@@ -84,11 +100,13 @@ export function HomeScreen({
       <div style={{ marginTop: 26 }}>
         <div className="micro dim">Total</div>
         <div className="balance-big" style={{ marginTop: 6 }}>
-          {totalSats !== null ? formatSats(totalSats) : anyError ? "—" : "…"}
+          {grandUsd !== null
+            ? grandUsd.toLocaleString("en-US", { style: "currency", currency: "USD" })
+            : totalSats !== null ? formatSats(totalSats) : anyError ? "—" : "…"}
         </div>
         <div className="balance-sub">
           {totalSats !== null && <span>{satsToBtc(totalSats)} BTC</span>}
-          {sav.state === "ok" && <span>+ {sav.eth} ETH in Savings</span>}
+          {sav.state === "ok" && <span>+ {sav.eth} ETH</span>}
           {anyError && <span style={{ color: "var(--amber)" }}>some balances unavailable</span>}
         </div>
       </div>
@@ -108,7 +126,11 @@ export function HomeScreen({
           <span className="r1">
             <span className="name">Savings</span>
             <span className="amt">
-              {sav.state === "ok" ? `${sav.eth} ETH` : sav.state === "loading" ? "…" : sav.state === "error" ? "unavailable" : ""}
+              {sav.state === "ok"
+                ? prices !== null
+                  ? (parseFloat(sav.eth) * prices.ethUsd).toLocaleString("en-US", { style: "currency", currency: "USD" })
+                  : `${sav.eth} ETH`
+                : sav.state === "loading" ? "…" : sav.state === "error" ? "unavailable" : ""}
             </span>
           </span>
           <span className="sub2">Two-device protected{sav.state === "off" ? " · not set up" : ""}</span>

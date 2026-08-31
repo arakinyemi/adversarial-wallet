@@ -14,7 +14,9 @@ import {
 import { LNBITS_INSTANCE_URL } from "../lightning/instance";
 import { hasSecret, openSecret, sealSecret, type KeyValueBackend } from "../storage";
 import { ErrorBanner, TopBar, errorMessage } from "./components";
-import { msatToSats } from "./format";
+import { fetchUsdPrices, type UsdPrices } from "../prices";
+import { msatToSats, satsToUsd } from "./format";
+import { QrCode } from "./QrCode";
 import { getSessionPin } from "./session-lock";
 import { saveConfig, type WalletConfig } from "./wallet-config";
 
@@ -44,6 +46,11 @@ export function LightningScreen({
   const [adminSealed, setAdminSealed] = useState(false);
   const [proofLine, setProofLine] = useState("");
   const [copied, setCopied] = useState(false);
+  const [prices, setPrices] = useState<UsdPrices | null>(null);
+
+  useEffect(() => {
+    void fetchUsdPrices().then(setPrices).catch(() => {});
+  }, []);
 
   const configured = config.lnbitsUrl !== "" && config.lnbitsInvoiceKey !== "";
   const readConfig: LnbitsConfig = { baseUrl: config.lnbitsUrl, apiKey: config.lnbitsInvoiceKey };
@@ -165,6 +172,7 @@ export function LightningScreen({
         </div>
         {invoice !== null && (
           <div className="panel pad" style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
+            <QrCode value={invoice.bolt11.toUpperCase()} size={180} />
             <div className="mono" style={{ fontSize: 11, lineHeight: 1.6, color: "var(--muted)", wordBreak: "break-all" }}>{invoice.bolt11}</div>
             <button className="btn ghost small" style={{ height: 44 }} onClick={() => void copyInvoice()}>
               {copied ? "Copied" : "Copy invoice"}
@@ -243,7 +251,14 @@ export function LightningScreen({
           </div>
         ) : (
           <>
-            <div className="balance-big">{msatToSats(balanceMsat).toLocaleString("en-US")} <span style={{ fontSize: 18, color: "var(--muted)" }}>sats</span></div>
+            <div className="balance-big">
+              {prices !== null
+                ? satsToUsd(msatToSats(balanceMsat), prices.btcUsd)
+                : <>{msatToSats(balanceMsat).toLocaleString("en-US")} <span style={{ fontSize: 18, color: "var(--muted)" }}>sats</span></>}
+            </div>
+            {prices !== null && (
+              <div className="balance-sub"><span>{msatToSats(balanceMsat).toLocaleString("en-US")} sats</span></div>
+            )}
           </>
         )}
       </div>

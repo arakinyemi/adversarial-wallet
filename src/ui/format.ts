@@ -24,3 +24,9 @@ export function truncateMiddle(value: string, keep = 8): string {
   if (value.length <= keep * 2 + 1) return value;
   return `${value.slice(0, keep)}…${value.slice(-keep)}`;
 }
+
+/** Sats → "$1,234.56" at the given USD-per-BTC price. */
+export function satsToUsd(sats: number, btcUsd: number): string {
+  const usd = (sats / 100_000_000) * btcUsd;
+  return usd.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}

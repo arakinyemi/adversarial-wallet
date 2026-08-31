@@ -19,7 +19,9 @@ import {
 } from "../btc";
 import { openSecret, type KeyValueBackend } from "../storage";
 import { ErrorBanner, TopBar, errorMessage } from "./components";
-import { formatSats, satsToBtc, truncateMiddle } from "./format";
+import { fetchUsdPrices, type UsdPrices } from "../prices";
+import { formatSats, satsToBtc, satsToUsd, truncateMiddle } from "./format";
+import { QrCode } from "./QrCode";
 import { getSessionPin } from "./session-lock";
 import { BTC_ENTROPY_KEY } from "./SetupFlow";
 import type { WalletConfig } from "./wallet-config";
@@ -57,6 +59,11 @@ export function BitcoinScreen({
   const [refusal, setRefusal] = useState("");
   const [sentTxid, setSentTxid] = useState("");
   const [copied, setCopied] = useState(false);
+  const [prices, setPrices] = useState<UsdPrices | null>(null);
+
+  useEffect(() => {
+    void fetchUsdPrices().then(setPrices).catch(() => {});
+  }, []);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -216,6 +223,7 @@ export function BitcoinScreen({
       <div className="screen">
         <TopBar title="Receive Bitcoin" onBack={() => setView("main")} />
         <div className="grow center" style={{ alignItems: "center", textAlign: "center" }}>
+          {receiveAddress !== null && <QrCode value={`bitcoin:${receiveAddress}`} />}
           <div className="mono" style={{ fontSize: 13, lineHeight: 1.8, color: "var(--muted)", wordBreak: "break-all", maxWidth: 280 }}>
             {receiveAddress ?? "…"}
           </div>
@@ -329,8 +337,13 @@ export function BitcoinScreen({
           <div className="sub">{busy ? "Checking balance…" : "Couldn't load your balance right now."}</div>
         ) : (
           <>
-            <div className="balance-big">{formatSats(balance.confirmedSats)}</div>
+            <div className="balance-big">
+              {prices !== null
+                ? satsToUsd(balance.confirmedSats, prices.btcUsd)
+                : formatSats(balance.confirmedSats)}
+            </div>
             <div className="balance-sub">
+              {prices !== null && <span>{formatSats(balance.confirmedSats)}</span>}
               <span>{satsToBtc(balance.confirmedSats)} BTC</span>
               {balance.pendingSats !== 0 && (
                 <span style={{ color: "var(--amber)" }}>

@@ -14,6 +14,7 @@ import { hasSecret, openSecret, sealSecret, type KeyValueBackend } from "../stor
 import { ErrorBanner, TopBar, errorMessage } from "./components";
 import { DiceEntry } from "./DiceEntry";
 import { getSessionPin } from "./session-lock";
+import { QrCode } from "./QrCode";
 import { truncateMiddle } from "./format";
 import type { WalletConfig } from "./wallet-config";
 
@@ -226,7 +227,8 @@ export function SafeScreen({
           {sendEth} ETH → {truncateMiddle(sendTo.trim(), 10)}
         </div>
         <div className="panel pad" style={{ marginTop: 20, borderColor: "oklch(0.7 0.19 300 / .5)", display: "flex", flexDirection: "column", gap: 14 }}>
-          <textarea rows={5} readOnly value={proposal} className="mono" style={{ fontSize: 10.5 }} onFocus={(e) => e.target.select()} />
+          <QrCode value={proposal} size={190} />
+          <textarea rows={4} readOnly value={proposal} className="mono" style={{ fontSize: 10.5 }} onFocus={(e) => e.target.select()} />
           <div className="body-dim" style={{ fontSize: 12, textAlign: "center" }}>
             Copy this to your second device and approve it there.
           </div>

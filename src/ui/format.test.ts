@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { formatSats, msatToSats, satsToBtc, truncateMiddle } from "./format";
+import { formatSats, msatToSats, satsToBtc, satsToUsd, truncateMiddle } from "./format";
 
 describe("display formatting", () => {
   test("satsToBtc", () => {
@@ -19,6 +19,12 @@ describe("display formatting", () => {
     expect(msatToSats(0)).toBe(0);
     expect(msatToSats(1_999)).toBe(1);
     expect(msatToSats(-1_999)).toBe(-1);
+  });
+
+  test("satsToUsd", () => {
+    expect(satsToUsd(100_000_000, 104_000)).toBe("$104,000.00");
+    expect(satsToUsd(50_000, 100_000)).toBe("$50.00");
+    expect(satsToUsd(0, 100_000)).toBe("$0.00");
   });
 
   test("truncateMiddle keeps ends and short strings", () => {

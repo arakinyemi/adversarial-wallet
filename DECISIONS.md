@@ -594,6 +594,26 @@ most of the handover documentation. Newest entries at the bottom.
   payload textarea in the two-device handoff (QR needs a library —
   pending approval).
 
+## Session 23 — fiat display + QR codes (2026-09-01)
+
+- **Two dependencies approved by the developer and added:**
+  (1) a **price endpoint** — CoinGecko's public simple-price API, chosen
+  after live reachability testing from the developer's own network showed
+  mempool.space and Coinbase blocked while CoinGecko answered in 0.7s.
+  One call returns BTC and ETH, so the home screen now shows a single
+  dollar total across all three accounts, with native units as the
+  sub-line. Prices are display sugar only: a price failure silently falls
+  back to sats/ETH and never blocks a balance — while within its own
+  scope the fetch fails closed (malformed or absurd data throws rather
+  than rendering a wrong number; 2 new tests).
+  (2) **`uqr` =0.1.3** for QR generation — zero-dependency, the smallest
+  supply-chain footprint in its category. QRs now render for the Bitcoin
+  receive address (bitcoin: URI), Lightning invoices (uppercased), and
+  the Savings two-device payload. Scanning (camera) remains out — it
+  would need another plugin; paste stays the import path.
+- This amends the "only three network endpoints" rule with a fourth,
+  display-only endpoint, by explicit approval.
+
 ## Session 17 — Cairn redesign from the Claude Design prototype (2026-08-24)
 
 - **UI rebuilt to the designer's prototype:** product name "Cairn", violet
