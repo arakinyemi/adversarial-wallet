@@ -1,4 +1,4 @@
-// Onboarding, following the Cairn design prototype: welcome → PIN (keypad,
+// Onboarding, following the Aegis design prototype: welcome → PIN (keypad,
 // set then confirm) → tier → [dice] → words → quiz → passphrase (ack +
 // hold-to-commit) → ready. Restore: welcome → words → PIN → passphrase.
 //
@@ -229,7 +229,7 @@ export function SetupFlow({
         <>
           <div className="grow center" style={{ gap: 18 }}>
             <div className="mark" />
-            <div style={{ font: "600 40px/1.05 var(--font)", letterSpacing: "-0.02em" }}>Cairn</div>
+            <div style={{ font: "600 40px/1.05 var(--font)", letterSpacing: "-0.02em" }}>Aegis</div>
             <div className="sub" style={{ maxWidth: 300 }}>
               A self-custody wallet. Your keys never leave this phone.
             </div>

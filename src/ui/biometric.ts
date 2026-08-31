@@ -7,7 +7,7 @@
 
 import { NativeBiometric } from "@capgo/capacitor-native-biometric";
 
-const SERVER = "wallet.cairn.pin";
+const SERVER = "wallet.aegis.pin";
 
 export async function biometricAvailable(): Promise<boolean> {
   try {
@@ -40,7 +40,7 @@ export async function disableBiometricUnlock(): Promise<void> {
 /** Prompt, then release the stored PIN. Rejection or absence throws. */
 export async function biometricUnlock(): Promise<string> {
   await NativeBiometric.verifyIdentity({
-    reason: "Unlock Cairn",
+    reason: "Unlock Aegis",
     title: "Unlock",
   });
   const credentials = await NativeBiometric.getCredentials({ server: SERVER });

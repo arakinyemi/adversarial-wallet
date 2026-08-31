@@ -199,7 +199,7 @@ export async function createWallet(
   const response = await fetchFn(`${baseUrl}/api/v1/account`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: "cairn" }),
+    body: JSON.stringify({ name: "aegis" }),
   });
   const parsed = (await response.json().catch(() => null)) as {
     adminkey?: unknown;

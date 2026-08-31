@@ -64,7 +64,7 @@ export function UnlockScreen({
     <div className="screen">
       <div className="grow center" style={{ alignItems: "center", textAlign: "center" }}>
         <div className="mark" />
-        <div className="h1">Cairn</div>
+        <div className="h1">Aegis</div>
         <div className="sub">{busy ? "Checking…" : "Enter your PIN"}</div>
         {error !== null && (
           <div className="mono" style={{ fontSize: 12, color: "var(--danger)" }}>{error}</div>

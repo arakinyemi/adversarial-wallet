@@ -71,7 +71,7 @@ export function HomeScreen({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div className="brandrow">
           <span className="sq" />
-          <span className="nm">Cairn</span>
+          <span className="nm">Aegis</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span className="micro">{config.network}</span>

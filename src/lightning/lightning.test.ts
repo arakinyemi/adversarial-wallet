@@ -176,7 +176,7 @@ describe("createWallet (self-provisioning)", () => {
   const KEYS = { adminkey: "a1".repeat(16), inkey: "b2".repeat(16) };
 
   test("provisions against the account endpoint and returns both keys", async () => {
-    const { calls, fetchFn } = mockLnbits(() => ({ body: { id: "w1", name: "cairn", ...KEYS } }));
+    const { calls, fetchFn } = mockLnbits(() => ({ body: { id: "w1", name: "aegis", ...KEYS } }));
     const wallet = await createWallet(BASE, fetchFn);
     expect(wallet).toEqual({ adminKey: KEYS.adminkey, invoiceKey: KEYS.inkey });
     expect(calls[0]!.url).toBe(`${BASE}/api/v1/account`);
