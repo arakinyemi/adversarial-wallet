@@ -82,6 +82,7 @@ export default function App() {
       <SetupFlow
         backend={backend}
         config={config}
+        onConfigChange={setConfig}
         onComplete={(xpub) => {
           const next = { ...config, xpub };
           setConfig(next);

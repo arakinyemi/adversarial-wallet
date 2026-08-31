@@ -24,13 +24,14 @@ import {
   MIN_DICE_ROLLS,
   type SeedEntropyResult,
 } from "../entropy";
+import { ESPLORA_MAINNET, ESPLORA_TESTNET } from "../btc";
 import { sealSecret, type KeyValueBackend } from "../storage";
 import { ErrorBanner, Segbar, errorMessage } from "./components";
 import { DiceEntry } from "./DiceEntry";
 import { HoldButton } from "./HoldButton";
 import { PinPad } from "./PinPad";
 import { unlock } from "./session-lock";
-import type { WalletConfig } from "./wallet-config";
+import { saveConfig, type WalletConfig } from "./wallet-config";
 
 export const BTC_ENTROPY_KEY = "wallet.btc-entropy.v1";
 
@@ -57,10 +58,12 @@ function pickQuizIndices(count: number, max: number): number[] {
 export function SetupFlow({
   backend,
   config,
+  onConfigChange,
   onComplete,
 }: {
   backend: KeyValueBackend;
   config: WalletConfig;
+  onConfigChange: (next: WalletConfig) => void;
   onComplete: (xpub: string) => void;
 }) {
   const [screen, setScreen] = useState<Screen>("welcome");
@@ -98,6 +101,26 @@ export function SetupFlow({
   const stepLabel = `Step ${stepAt + 1} of ${steps.length}`;
 
   const go = (next: Screen) => { setError(null); setScreen(next); };
+
+  // The network must be chosen BEFORE the ceremony: derived keys and the
+  // stored xpub are network-specific and cannot be switched afterwards.
+  const toggleNetwork = () => {
+    const network = config.network === "mainnet" ? "testnet" : "mainnet";
+    const next: WalletConfig = {
+      ...config,
+      network,
+      esploraUrl: network === "mainnet" ? ESPLORA_MAINNET : ESPLORA_TESTNET,
+    };
+    onConfigChange(next);
+    void saveConfigSafe(next);
+  };
+  const saveConfigSafe = async (next: WalletConfig) => {
+    try {
+      await saveConfig(backend, next);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
 
   const wipeSecrets = () => {
     entropy?.fill(0);
@@ -244,6 +267,13 @@ export function SetupFlow({
             <div className="micro" style={{ textAlign: "center", marginTop: 8 }}>
               Bitcoin · Lightning · Savings
             </div>
+            <button
+              className="linklike"
+              onClick={toggleNetwork}
+              style={{ marginTop: 4 }}
+            >
+              network: <span className="mono" style={{ color: config.network === "mainnet" ? "var(--accent)" : "var(--amber)" }}>{config.network}</span> · tap to switch
+            </button>
           </div>
         </>
       )}
