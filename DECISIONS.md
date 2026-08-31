@@ -571,6 +571,29 @@ most of the handover documentation. Newest entries at the bottom.
   code change when the paid instance exists; app users still see one-tap
   setup either way.
 
+## Session 22 — everyday-user audit (2026-08-31)
+
+- **Standing rule adopted after developer feedback: the app is for people
+  who know nothing about APIs or nodes — internals stay inside the walls.**
+  Full audit pass applied: network/endpoint settings removed from Settings
+  (network is chosen once at the welcome screen; endpoints derive
+  internally); mainnet is now the DEFAULT and test mode is the flagged
+  exception (amber "test mode" chip, only shown when active); Lightning
+  self-provisions with no button; "Base · 2-of-3" became "Two-device
+  protected"; "Verify on chain" became "Check account security"; preimage
+  hashes in the UI became "payment receipt verified"; and every module
+  error message was rewritten for humans ("The balance service returned an
+  error…", "The Bitcoin network rejected this payment: …") while keeping
+  the failing detail. A wallet's network is immutable after creation —
+  the previous switchable-network trap produced a testnet wallet facing
+  mainnet endpoints, now impossible. The core's xpub/network mismatch got
+  its own error: "this wallet was created for a different network."
+- **Consciously kept technical:** sats as the display unit (fiat needs a
+  price-feed dependency — pending approval), the Savings owner-address
+  fields in Settings (operator setup, not everyday flow), and the raw
+  payload textarea in the two-device handoff (QR needs a library —
+  pending approval).
+
 ## Session 17 — Cairn redesign from the Claude Design prototype (2026-08-24)
 
 - **UI rebuilt to the designer's prototype:** product name "Cairn", violet
