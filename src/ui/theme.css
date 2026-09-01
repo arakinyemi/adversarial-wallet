@@ -1,51 +1,52 @@
-/* Aegis — dark editorial theme from the design prototype.
-   Hand-written; no framework. Every rule is reviewable. */
+/* Aegis — "Signal" design system, from the picked canvas direction.
+   Instrument-panel seriousness: Space Grotesk + IBM Plex Mono (bundled
+   locally via Fontsource — no runtime font loading), near-black with a
+   single lime accent, sharp 2px corners. Hand-written; no framework. */
 
 :root {
-  --bg: #0e1116;
-  --bg-deep: #090b0f;
-  --surface: #131823;
-  --surface-2: #1a2030;
-  --hairline: rgba(139, 148, 163, 0.14);
-  --border: rgba(139, 148, 163, 0.25);
-  --border-strong: rgba(139, 148, 163, 0.35);
-  --text: #e9edf4;
-  --body: #c6cdd8;
-  --muted: #8d97a7;
-  --faint: #5c6674;
-  --accent: oklch(0.7 0.19 300);
-  --accent-ink: #0e1116;
-  --success: oklch(0.72 0.12 155);
-  --danger: oklch(0.72 0.15 25);
-  --amber: oklch(0.78 0.13 85);
-  --hover: #11151d;
-  --r: 4px;
-  --r-lg: 6px;
-  --font: system-ui, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bg: #0b0d0b;
+  --bg-deep: #070907;
+  --surface: #0e120d;
+  --surface-2: #1a201a;
+  --hairline: rgba(200, 255, 180, 0.10);
+  --border: rgba(200, 255, 180, 0.22);
+  --border-strong: rgba(200, 255, 180, 0.32);
+  --text: #e8f0e4;
+  --body: #c3cec0;
+  --muted: #8fa08a;
+  --faint: #5f6e5a;
+  --accent: oklch(0.87 0.21 132);
+  --accent-ink: #0b0d0b;
+  --success: oklch(0.87 0.21 132);
+  --danger: oklch(0.68 0.19 25);
+  --amber: oklch(0.8 0.15 85);
+  --hover: #10140f;
+  --r: 2px;
+  --r-lg: 2px;
+  --font: "Space Grotesk", system-ui, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
-/* Light mode: same structure, swapped palette. Chosen from Settings and
-   stamped as data-theme on <html>; the app deliberately does not follow the
-   OS setting so the choice is explicit and stable. */
+/* Light mode: Signal on paper — same structure, swapped palette. Chosen
+   from Settings; deliberately does not follow the OS setting. */
 :root[data-theme="light"] {
-  --bg: #f0eee9;
-  --bg-deep: #e7e4dd;
+  --bg: #f2f4ee;
+  --bg-deep: #e9ece2;
   --surface: #ffffff;
-  --surface-2: #e8e6e0;
-  --hairline: rgba(20, 24, 32, 0.1);
-  --border: rgba(20, 24, 32, 0.18);
-  --border-strong: rgba(20, 24, 32, 0.3);
-  --text: #1a1d24;
-  --body: #3a4150;
-  --muted: #5c6674;
-  --faint: #8d97a7;
-  --accent: oklch(0.5 0.19 300);
+  --surface-2: #e2e6da;
+  --hairline: rgba(20, 26, 16, 0.10);
+  --border: rgba(20, 26, 16, 0.20);
+  --border-strong: rgba(20, 26, 16, 0.32);
+  --text: #171a14;
+  --body: #3c443a;
+  --muted: #5f6a5a;
+  --faint: #8b9585;
+  --accent: oklch(0.55 0.21 132);
   --accent-ink: #ffffff;
-  --success: oklch(0.5 0.12 155);
+  --success: oklch(0.55 0.21 132);
   --danger: oklch(0.55 0.18 25);
-  --amber: oklch(0.55 0.12 85);
-  --hover: #e9e6df;
+  --amber: oklch(0.6 0.12 85);
+  --hover: #eaeee3;
 }
 
 * { box-sizing: border-box; margin: 0; }
@@ -128,9 +129,9 @@ button { font: inherit; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); }
 .btn.primary:hover { filter: brightness(1.1); }
 .btn.ghost { border: 1px solid var(--border-strong); }
-.btn.ghost:hover { border-color: rgba(139, 148, 163, 0.6); }
+.btn.ghost:hover { border-color: var(--border-strong); }
 .btn.small { height: 48px; font-size: 14px; }
-.btn:disabled { background: #141922; color: var(--faint); cursor: not-allowed; filter: none; border: none; }
+.btn:disabled { background: var(--surface-2); color: var(--faint); cursor: not-allowed; filter: none; border: none; }
 .btn-row { display: flex; gap: 12px; }
 .btn-row .btn { flex: 1; }
 .linklike {
@@ -148,7 +149,7 @@ button { font: inherit; }
 .stack { display: flex; flex-direction: column; gap: 12px; }
 
 /* --- panels, rows --- */
-.panel { border: 1px solid rgba(139, 148, 163, 0.2); border-radius: var(--r-lg); }
+.panel { border: 1px solid var(--hairline); border-radius: var(--r-lg); }
 .panel.pad { padding: 16px 18px; }
 .rowline {
   display: flex;
@@ -230,7 +231,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); font-family: va
   user-select: none;
 }
 .die:hover { border-color: var(--accent); background: var(--surface); }
-.die:active { background: oklch(0.7 0.19 300 / 0.18); }
+.die:active { background: oklch(0.87 0.21 132 / 0.16); }
 .die .face { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); width: 44px; height: 44px; }
 .die .pip { width: 9px; height: 9px; border-radius: 50%; background: var(--text); place-self: center; }
 .dicefoot { display: flex; justify-content: space-between; margin-top: 8px; font: 11px var(--mono); color: var(--faint); }
@@ -241,7 +242,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); font-family: va
 .wordgrid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 3px 20px;
   margin-top: 18px; padding: 16px 18px;
-  border: 1px solid rgba(139, 148, 163, 0.2); border-radius: var(--r-lg);
+  border: 1px solid var(--hairline); border-radius: var(--r-lg);
 }
 .wordgrid .w { display: flex; gap: 10px; font: 13px/1.85 var(--mono); }
 .wordgrid .w b { color: var(--faint); width: 20px; text-align: right; font-weight: 400; }
@@ -305,7 +306,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); font-family: va
 
 .brandrow { display: flex; align-items: center; gap: 10px; }
 .brandrow .sq { width: 10px; height: 10px; background: var(--accent); }
-.brandrow .nm { font: 600 16px var(--font); }
+.brandrow .nm { font: 700 15px var(--font); letter-spacing: 0.03em; text-transform: uppercase; }
 .gear {
   background: none; border: none; color: var(--faint); cursor: pointer;
   font: 16px var(--mono); padding: 4px;
