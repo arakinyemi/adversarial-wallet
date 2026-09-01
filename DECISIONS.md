@@ -571,6 +571,25 @@ most of the handover documentation. Newest entries at the bottom.
   code change when the paid instance exists; app users still see one-tap
   setup either way.
 
+## Session 24 — the Signal design system (2026-09-01)
+
+- **Design direction chosen on a Claude Design canvas and implemented.**
+  Three directions were drafted as real phone artboards (Signal /
+  Heritage / Steel, each with motivation and tradeoff); the developer
+  picked **Signal**: Space Grotesk + IBM Plex Mono, near-black
+  green-tinted background, a single lime accent (oklch 0.87 0.21 132),
+  2px corners, hairlines in translucent green. All eleven flow screens
+  are designed on the canvas (welcome, PIN, dice, words, passphrase,
+  home, send confirm, refusal, Instant, Savings, unlock) and remain the
+  editable reference; unchosen directions kept on a second page.
+- **Fonts ship inside the app** — `@fontsource/space-grotesk` and
+  `@fontsource/ibm-plex-mono` =5.3.0 (dependency mechanism flagged at
+  direction-pick time), bundled by Vite; the no-external-assets rule
+  holds. Implementation is a token swap plus a literal-gray sweep — the
+  stylesheet was already fully tokenized, so every screen restyled at
+  once. Light mode became "Signal on paper" (ivory-green, darkened lime
+  for contrast). Verified rendering in the built app offline.
+
 ## Session 22 — everyday-user audit (2026-08-31)
 
 - **Standing rule adopted after developer feedback: the app is for people
