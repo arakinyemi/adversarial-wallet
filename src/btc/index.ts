@@ -282,3 +282,85 @@ export async function scanWatchOnlyBalance(
 
   return { confirmedSats, pendingSats, addressesScanned, usedAddresses };
 }
+
+/** One wallet-relevant transaction: signed net effect on our addresses. */
+export interface TxActivity {
+  txid: string;
+  netSats: number;
+  confirmed: boolean;
+  time: number | null;
+}
+
+/** Recent transactions across the given (already-known-used) addresses,
+ * deduplicated, with the signed net amount computed from inputs and
+ * outputs. Fail-closed: any HTTP failure or malformed entry throws. */
+export async function fetchRecentTransactions(
+  esploraUrl: string,
+  addresses: string[],
+  fetchFn: FetchLike = defaultGet,
+): Promise<TxActivity[]> {
+  const mine = new Set(addresses);
+  const byId = new Map<string, TxActivity>();
+
+  for (let start = 0; start < addresses.length; start += SCAN_CHUNK) {
+    const chunk = addresses.slice(start, start + SCAN_CHUNK);
+    const lists = await Promise.all(
+      chunk.map(async (address) => {
+        const response = await fetchFn(`${esploraUrl}/address/${address}/txs`);
+        if (!response.ok) {
+          throw new BtcWatchError(`The balance service returned an error (HTTP ${response.status}).`);
+        }
+        const body = await response.json();
+        if (!Array.isArray(body)) {
+          throw new BtcWatchError("The balance service sent an unreadable transaction list.");
+        }
+        return body;
+      }),
+    );
+    for (const list of lists) {
+      for (const entry of list) {
+        const tx = entry as {
+          txid?: unknown;
+          status?: { confirmed?: unknown; block_time?: unknown };
+          vin?: { prevout?: { scriptpubkey_address?: unknown; value?: unknown } | null }[];
+          vout?: { scriptpubkey_address?: unknown; value?: unknown }[];
+        } | null;
+        if (
+          tx === null ||
+          typeof tx.txid !== "string" ||
+          typeof tx.status?.confirmed !== "boolean" ||
+          !Array.isArray(tx.vin) ||
+          !Array.isArray(tx.vout)
+        ) {
+          throw new BtcWatchError("The balance service sent a malformed transaction.");
+        }
+        if (byId.has(tx.txid)) continue;
+        let net = 0;
+        for (const vout of tx.vout) {
+          if (typeof vout?.scriptpubkey_address === "string" && mine.has(vout.scriptpubkey_address)) {
+            if (typeof vout.value !== "number" || !Number.isSafeInteger(vout.value)) {
+              throw new BtcWatchError("The balance service sent a malformed transaction.");
+            }
+            net += vout.value;
+          }
+        }
+        for (const vin of tx.vin) {
+          const prev = vin?.prevout;
+          if (prev && typeof prev.scriptpubkey_address === "string" && mine.has(prev.scriptpubkey_address)) {
+            if (typeof prev.value !== "number" || !Number.isSafeInteger(prev.value)) {
+              throw new BtcWatchError("The balance service sent a malformed transaction.");
+            }
+            net -= prev.value;
+          }
+        }
+        const time = typeof tx.status.block_time === "number" ? tx.status.block_time : null;
+        byId.set(tx.txid, { txid: tx.txid, netSats: net, confirmed: tx.status.confirmed, time });
+      }
+    }
+  }
+
+  return [...byId.values()].sort((a, b) => {
+    if (a.confirmed !== b.confirmed) return a.confirmed ? 1 : -1;
+    return (b.time ?? 0) - (a.time ?? 0);
+  });
+}

@@ -152,6 +152,26 @@ export async function verifySafeDeployment(
   expectedOwners: readonly [string, string, string],
 ): Promise<SafeOnChainConfig> {
   const expected = normalizeOwners(expectedOwners);
+  const config = await readSafeConfig(client, safeAddress);
+  const chainSet = new Set(config.owners);
+  for (const owner of expected) {
+    if (!chainSet.has(owner)) {
+      throw new EvmError(
+        `Safe at ${getAddress(safeAddress)} is missing expected owner ${owner}; on-chain owners: ${config.owners.join(", ")}`,
+      );
+    }
+  }
+  return config;
+}
+
+/** Read a Safe's owners and threshold from the contract with the same
+ * structural validation (exactly 3 owners, threshold 2) but no expected
+ * owner set — used by the guided account-linking flow, where the user
+ * confirms the owners the chain reports. */
+export async function readSafeConfig(
+  client: SafeReader,
+  safeAddress: string,
+): Promise<SafeOnChainConfig> {
   const address = getAddress(safeAddress);
 
   const chainOwnersRaw = await client.readContract({
@@ -170,14 +190,6 @@ export async function verifySafeDeployment(
     throw new EvmError(
       `Safe at ${address} has ${chainOwners.length} owners on chain, expected ${SAFE_OWNER_COUNT}`,
     );
-  }
-  const chainSet = new Set(chainOwners);
-  for (const owner of expected) {
-    if (!chainSet.has(owner)) {
-      throw new EvmError(
-        `Safe at ${address} is missing expected owner ${owner}; on-chain owners: ${chainOwners.join(", ")}`,
-      );
-    }
   }
   if (threshold !== BigInt(SAFE_THRESHOLD)) {
     throw new EvmError(

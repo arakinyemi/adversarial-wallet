@@ -3,6 +3,7 @@ import {
   assertSweptToZero,
   createInvoice,
   createWallet,
+  listPayments,
   fetchPaymentProof,
   getBalanceMsat,
   LightningError,
@@ -169,6 +170,32 @@ describe("balance and the sweep gate", () => {
     await expect(assertSweptToZero(config(nonzero.fetchFn))).rejects.toThrow(
       /not zero/,
     );
+  });
+});
+
+describe("listPayments", () => {
+  test("maps and returns the payment list", async () => {
+    const { calls, fetchFn } = mockLnbits(() => ({ body: [
+      { amount: -21_000_000, memo: "coffee", time: 1_700_000_100, pending: false, payment_hash: PAYMENT_HASH },
+      { amount: 5_000_000, memo: "", time: 1_700_000_000, pending: true, payment_hash: PAYMENT_HASH },
+    ] }));
+    const list = await listPayments(config(fetchFn));
+    expect(calls[0]!.url).toBe(`${BASE}/api/v1/payments`);
+    expect(list).toEqual([
+      { amountMsat: -21_000_000, memo: "coffee", time: 1_700_000_100, pending: false },
+      { amountMsat: 5_000_000, memo: "", time: 1_700_000_000, pending: true },
+    ]);
+  });
+
+  test("HTTP errors and malformed entries refuse", async () => {
+    for (const responder of [
+      () => ({ status: 500, body: { detail: "boom" } }),
+      () => ({ body: {} }),
+      () => ({ body: [{ amount: "x", time: 1, pending: false }] }),
+    ]) {
+      const { fetchFn } = mockLnbits(responder as (c: Call) => { status?: number; body: unknown });
+      await expect(listPayments(config(fetchFn))).rejects.toThrow(LightningError);
+    }
   });
 });
 

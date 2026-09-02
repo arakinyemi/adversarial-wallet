@@ -240,3 +240,37 @@ export async function assertSweptToZero(config: LnbitsConfig): Promise<void> {
     throw new LightningError(`lightning balance is not zero: ${balance} msat remain`);
   }
 }
+
+export interface LnPayment {
+  /** Millisats; negative for outgoing payments. */
+  amountMsat: number;
+  memo: string;
+  time: number;
+  pending: boolean;
+}
+
+/** Payment history for the wallet (invoice key suffices). */
+export async function listPayments(config: LnbitsConfig): Promise<LnPayment[]> {
+  const body = await request(config, "GET", "/api/v1/payments");
+  if (!Array.isArray(body)) {
+    throw new LightningError("The Lightning service sent an unreadable payment list.");
+  }
+  return body.map((entry): LnPayment => {
+    const p = entry as { amount?: unknown; memo?: unknown; time?: unknown; pending?: unknown } | null;
+    if (
+      p === null ||
+      typeof p.amount !== "number" ||
+      !Number.isSafeInteger(p.amount) ||
+      typeof p.time !== "number" ||
+      typeof p.pending !== "boolean"
+    ) {
+      throw new LightningError("The Lightning service sent a malformed payment entry.");
+    }
+    return {
+      amountMsat: p.amount,
+      memo: typeof p.memo === "string" ? p.memo : "",
+      time: p.time,
+      pending: p.pending,
+    };
+  });
+}

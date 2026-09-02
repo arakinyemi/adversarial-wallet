@@ -10,6 +10,7 @@ import {
   deploySafe,
   entropyToEvmSigner,
   EvmError,
+  readSafeConfig,
   SAFE_THRESHOLD,
   verifySafeDeployment,
   type DeploySafeParams,
@@ -133,6 +134,20 @@ function mockChainClient(owners: string[], threshold: bigint) {
     }),
   });
 }
+
+describe("readSafeConfig (no expectation) still fails closed on shape", () => {
+  test("returns owners and threshold from a healthy account", async () => {
+    const client = mockChainClient([OWNER_A, OWNER_B, OWNER_C], 2n);
+    const cfg = await readSafeConfig(client, SAFE_ADDRESS);
+    expect(cfg.owners).toHaveLength(3);
+    expect(cfg.threshold).toBe(2n);
+  });
+
+  test("wrong owner count or threshold refuses", async () => {
+    await expect(readSafeConfig(mockChainClient([OWNER_A, OWNER_B], 2n), SAFE_ADDRESS)).rejects.toThrow(EvmError);
+    await expect(readSafeConfig(mockChainClient([OWNER_A, OWNER_B, OWNER_C], 1n), SAFE_ADDRESS)).rejects.toThrow(EvmError);
+  });
+});
 
 describe("verifySafeDeployment reads back from chain and fails closed", () => {
   const expected = [OWNER_A, OWNER_B, OWNER_C] as const;

@@ -11,6 +11,7 @@ import {
   estimateFeeSats,
   fetchAddressActivity,
   fetchFeeRate,
+  fetchRecentTransactions,
   fetchUtxos,
   GAP_LIMIT,
   scanWatchOnlyBalance,
@@ -254,6 +255,66 @@ describe("automatic fees fail closed", () => {
     expect(() => estimateFeeSats(0, 2, 1)).toThrow(BtcWatchError);
     expect(() => estimateFeeSats(1, 0, 1)).toThrow(BtcWatchError);
     expect(() => estimateFeeSats(1, 2, 0)).toThrow(BtcWatchError);
+  });
+});
+
+describe("fetchRecentTransactions", () => {
+  const A = "bc1qmine1";
+  const B = "bc1qmine2";
+  const OTHER = "bc1qtheirs";
+  const tx = (txid: string, opts: { toMine?: number; fromMine?: number; confirmed?: boolean; time?: number }) => ({
+    txid,
+    status: { confirmed: opts.confirmed ?? true, block_time: opts.time ?? 1_700_000_000 },
+    vin: opts.fromMine !== undefined
+      ? [{ prevout: { scriptpubkey_address: A, value: opts.fromMine } }]
+      : [{ prevout: { scriptpubkey_address: OTHER, value: 5_000 } }],
+    vout: opts.toMine !== undefined
+      ? [{ scriptpubkey_address: A, value: opts.toMine }, { scriptpubkey_address: OTHER, value: 1 }]
+      : [{ scriptpubkey_address: OTHER, value: 4_000 }],
+  });
+  const txFetch = (byAddress: Record<string, unknown[]>): FetchLike => async (url) => {
+    const address = url.split("/").slice(-2)[0]!;
+    return { ok: true, status: 200, json: async () => byAddress[address] ?? [] };
+  };
+
+  test("computes signed net amounts and deduplicates across addresses", async () => {
+    const shared = tx("aa", { toMine: 10_000 });
+    const list = await fetchRecentTransactions(ESPLORA, [A, B], txFetch({
+      [A]: [shared, tx("bb", { fromMine: 8_000, time: 1_700_000_100 })],
+      [B]: [shared],
+    }));
+    expect(list).toHaveLength(2);
+    const received = list.find((t) => t.txid === "aa")!;
+    const sent = list.find((t) => t.txid === "bb")!;
+    expect(received.netSats).toBe(10_000);
+    expect(sent.netSats).toBe(-8_000);
+  });
+
+  test("pending transactions sort first, then newest", async () => {
+    const list = await fetchRecentTransactions(ESPLORA, [A], txFetch({
+      [A]: [
+        tx("old", { toMine: 1, time: 100 }),
+        tx("new", { toMine: 1, time: 200 }),
+        { ...tx("pend", { toMine: 1 }), status: { confirmed: false } },
+      ],
+    }));
+    expect(list.map((t) => t.txid)).toEqual(["pend", "new", "old"]);
+  });
+
+  test("HTTP errors and malformed entries refuse", async () => {
+    const dead: FetchLike = async () => ({ ok: false, status: 502, json: async () => ({}) });
+    await expect(fetchRecentTransactions(ESPLORA, [A], dead)).rejects.toThrow(BtcWatchError);
+    const bad = txFetch({ [A]: [{ txid: 123 }] });
+    await expect(fetchRecentTransactions(ESPLORA, [A], bad)).rejects.toThrow(BtcWatchError);
+    const notArray: FetchLike = async () => ({ ok: true, status: 200, json: async () => ({}) });
+    await expect(fetchRecentTransactions(ESPLORA, [A], notArray)).rejects.toThrow(BtcWatchError);
+  });
+
+  test("no addresses means no requests and no activity", async () => {
+    const calls: string[] = [];
+    const spy: FetchLike = async (url) => { calls.push(url); return { ok: true, status: 200, json: async () => [] }; };
+    expect(await fetchRecentTransactions(ESPLORA, [], spy)).toEqual([]);
+    expect(calls).toHaveLength(0);
   });
 });
 
