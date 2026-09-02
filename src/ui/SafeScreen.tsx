@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { createPublicClient, formatEther, getAddress, http, parseEther, type Hex } from "viem";
 import { base, baseSepolia } from "viem/chains";
-import { entropyToEvmSigner, verifySafeDeployment } from "../evm";
+import { entropyToEvmSigner, readSafeConfig, verifySafeDeployment } from "../evm";
 import { countersignAndExecute, proposeSafeSpend } from "../evm/spend";
 import { generateQuickSeedEntropy, generateSeedEntropy, MIN_DICE_ROLLS } from "../entropy";
 import { hasSecret, openSecret, sealSecret, type KeyValueBackend } from "../storage";
@@ -16,7 +16,7 @@ import { DiceEntry } from "./DiceEntry";
 import { getSessionPin } from "./session-lock";
 import { QrCode } from "./QrCode";
 import { truncateMiddle } from "./format";
-import type { WalletConfig } from "./wallet-config";
+import { saveConfig, type WalletConfig } from "./wallet-config";
 
 export const EVM_SIGNER_KEY = "wallet.evm-signer-a.v1";
 
@@ -28,10 +28,12 @@ type View = "main" | "send" | "wait" | "approve" | "done";
 export function SafeScreen({
   backend,
   config,
+  onConfigChange,
   onHome,
 }: {
   backend: KeyValueBackend;
   config: WalletConfig;
+  onConfigChange: (next: WalletConfig) => void;
   onHome: () => void;
 }) {
   const [view, setView] = useState<View>("main");
@@ -49,6 +51,8 @@ export function SafeScreen({
   const [incoming, setIncoming] = useState("");
   const [doneTx, setDoneTx] = useState("");
   const [copied, setCopied] = useState(false);
+  const [linkAddress, setLinkAddress] = useState("");
+  const [linkPreview, setLinkPreview] = useState<{ owners: string[]; mine: string } | null>(null);
 
   const chain = config.network === "mainnet" ? base : baseSepolia;
   const rpcUrl = chain.rpcUrls.default.http[0]!;
@@ -88,6 +92,55 @@ export function SafeScreen({
       setError(errorMessage(e));
     } finally {
       setDice("");
+      setBusy(false);
+    }
+  };
+
+  /** Guided account linking: paste the address, the app reads the three
+   * owner keys from the chain and checks THIS phone's key is among them,
+   * then the user confirms what the chain reported. */
+  const checkLink = async () => {
+    setError(null);
+    setBusy(true);
+    setLinkPreview(null);
+    try {
+      const client = createPublicClient({ chain, transport: http(rpcUrl) });
+      const onChain = await readSafeConfig(client, linkAddress.trim());
+      await withSignerKey(async (_key, myAddress) => {
+        const mine = getAddress(myAddress);
+        if (!onChain.owners.includes(mine)) {
+          throw new Error(
+            "This phone's key is not one of that account's three keys. Check the address — linking it would leave this phone unable to sign.",
+          );
+        }
+        // This phone's key first, so the display order is meaningful.
+        const owners = [mine, ...onChain.owners.filter((o) => o !== mine)];
+        setLinkPreview({ owners, mine });
+      });
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmLink = async () => {
+    if (linkPreview === null) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const next = {
+        ...config,
+        safeAddress: getAddress(linkAddress.trim()),
+        safeOwners: linkPreview.owners,
+      };
+      await saveConfig(backend, next);
+      onConfigChange(next);
+      setLinkAddress("");
+      setLinkPreview(null);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
       setBusy(false);
     }
   };
@@ -284,6 +337,50 @@ export function SafeScreen({
     );
   }
 
+  // --- guided account linking (signer exists, no account yet) ---
+  if (config.safeAddress === "") {
+    return (
+      <div className="screen">
+        <TopBar title="Savings · link account" onBack={onHome} />
+        <ErrorBanner error={error} />
+        <div className="h1" style={{ marginTop: 20, fontSize: 24 }}>Link your savings account</div>
+        <div className="sub" style={{ marginTop: 8 }}>
+          Paste the account address. The app checks it on the chain and shows
+          you its three keys before anything is saved.
+        </div>
+        <div className="stack" style={{ marginTop: 16 }}>
+          <input value={linkAddress} onChange={(e) => { setLinkAddress(e.target.value); setLinkPreview(null); }} placeholder="0x…" spellCheck={false} autoComplete="off" style={{ fontSize: 13 }} />
+        </div>
+        {linkPreview !== null && (
+          <div className="panel" style={{ marginTop: 14 }}>
+            {linkPreview.owners.map((owner, i) => (
+              <div className="rowline" key={owner} style={{ padding: "13px 18px" }}>
+                <span style={{ fontFamily: "var(--font)" }}>
+                  {i === 0 ? "This phone ✓" : i === 1 ? "Second key" : "Third key"}
+                </span>
+                <span className="v plain mono" style={{ fontSize: 12, color: "var(--muted)" }}>{truncateMiddle(owner, 8)}</span>
+              </div>
+            ))}
+            <div className="rowline" style={{ padding: "13px 18px" }}>
+              <span style={{ fontFamily: "var(--font)" }}>Approvals needed</span>
+              <span className="v">2 of 3</span>
+            </div>
+          </div>
+        )}
+        <div className="grow" />
+        {linkPreview === null ? (
+          <button className="btn primary" disabled={busy || linkAddress.trim() === ""} onClick={() => void checkLink()}>
+            {busy ? "Checking on chain…" : "Check account"}
+          </button>
+        ) : (
+          <button className="btn primary" disabled={busy} onClick={() => void confirmLink()}>
+            {busy ? "Linking…" : "Link this account"}
+          </button>
+        )}
+      </div>
+    );
+  }
+
   const owners = config.safeOwners;
   return (
     <div className="screen">
@@ -302,7 +399,7 @@ export function SafeScreen({
       </div>
       {owners.length === 3 && (
         <div className="panel" style={{ marginTop: 22 }}>
-          {["This phone", "Second device", "Recovery key"].map((label, i) => (
+          {["This phone", "Second key", "Third key"].map((label, i) => (
             <div className="rowline" key={label} style={{ padding: "13px 18px" }}>
               <span style={{ fontFamily: "var(--font)" }}>{label}</span>
               <span className="v plain mono" style={{ fontSize: 12, color: "var(--muted)" }}>{truncateMiddle(owners[i]!, 8)}</span>
