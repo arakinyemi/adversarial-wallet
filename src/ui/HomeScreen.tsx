@@ -3,7 +3,7 @@
 // and the total only renders when every configured component loaded — a
 // partial sum must never masquerade as the whole.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPublicClient, formatEther, getAddress, http } from "viem";
 import { base, baseSepolia } from "viem/chains";
 import type { Intent, Route } from "../App";
@@ -11,6 +11,7 @@ import { scanWatchOnlyBalance } from "../btc";
 import { getBalanceMsat } from "../lightning";
 import { fetchUsdPrices, type UsdPrices } from "../prices";
 import { BottomNav } from "./BottomNav";
+import { PullToRefresh } from "./PullToRefresh";
 import { formatSats, msatToSats, satsToBtc, satsToUsd } from "./format";
 import type { WalletConfig } from "./wallet-config";
 
@@ -34,36 +35,41 @@ export function HomeScreen({
   );
   const [prices, setPrices] = useState<UsdPrices | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    // Display sugar only: a price failure silently falls back to sats.
-    void fetchUsdPrices()
-      .then((usd) => { if (alive) setPrices(usd); })
-      .catch(() => {});
-    void scanWatchOnlyBalance({
-      esploraUrl: config.esploraUrl,
-      xpub: config.xpub,
-      network: config.network,
-    })
-      .then((b) => { if (alive) setBtc({ state: "ok", value: b.confirmedSats + Math.max(0, b.pendingSats) }); })
-      .catch(() => { if (alive) setBtc({ state: "error" }); });
-
+  const load = useCallback(async () => {
+    const tasks: Promise<unknown>[] = [
+      // Display sugar only: a price failure silently falls back to sats.
+      fetchUsdPrices().then(setPrices).catch(() => {}),
+      scanWatchOnlyBalance({
+        esploraUrl: config.esploraUrl,
+        xpub: config.xpub,
+        network: config.network,
+      })
+        .then((b) => setBtc({ state: "ok", value: b.confirmedSats + Math.max(0, b.pendingSats) }))
+        .catch(() => setBtc({ state: "error" })),
+    ];
     if (config.lnbitsUrl !== "" && config.lnbitsInvoiceKey !== "") {
-      void getBalanceMsat({ baseUrl: config.lnbitsUrl, apiKey: config.lnbitsInvoiceKey })
-        .then((msat) => { if (alive) setLn({ state: "ok", value: msatToSats(msat) }); })
-        .catch(() => { if (alive) setLn({ state: "error" }); });
+      tasks.push(
+        getBalanceMsat({ baseUrl: config.lnbitsUrl, apiKey: config.lnbitsInvoiceKey })
+          .then((msat) => setLn({ state: "ok", value: msatToSats(msat) }))
+          .catch(() => setLn({ state: "error" })),
+      );
     }
-
     if (config.safeAddress !== "") {
       const chain = config.network === "mainnet" ? base : baseSepolia;
       const client = createPublicClient({ chain, transport: http(chain.rpcUrls.default.http[0]!) });
-      void client
-        .getBalance({ address: getAddress(config.safeAddress) })
-        .then((wei) => { if (alive) setSav({ state: "ok", eth: formatEther(wei) }); })
-        .catch(() => { if (alive) setSav({ state: "error" }); });
+      tasks.push(
+        client
+          .getBalance({ address: getAddress(config.safeAddress) })
+          .then((wei) => setSav({ state: "ok", eth: formatEther(wei) }))
+          .catch(() => setSav({ state: "error" })),
+      );
     }
-    return () => { alive = false; };
+    await Promise.all(tasks);
   }, [config]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const satParts = [btc, ln].filter((l) => l.state !== "off");
   const allSatsLoaded = satParts.every((l) => l.state === "ok");
@@ -86,6 +92,7 @@ export function HomeScreen({
       : null;
 
   return (
+    <PullToRefresh onRefresh={load}>
     <div className="screen with-nav with-actions">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div className="brandrow">
@@ -167,5 +174,6 @@ export function HomeScreen({
       )}
       <BottomNav at="home" go={go} />
     </div>
+    </PullToRefresh>
   );
 }

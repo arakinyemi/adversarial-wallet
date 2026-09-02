@@ -707,3 +707,9 @@ most of the handover documentation. Newest entries at the bottom.
   receive view — Lightning only when it is already set up, otherwise the
   chooser row is disabled and the main view's self-provisioning path
   stays the entry. FloatingNav renamed BottomNav to match reality.
+- **Pull-to-refresh, hand-rolled** on raw touch events (no library — a
+  dependency ask for a gesture would be absurd): drag from the top of
+  Home, Activity, Spending, or Instant reloads that screen's data. The
+  indicator is a small square that arms in the accent at the trigger
+  distance and spins while loading; old values stay on screen during a
+  refresh rather than flashing to a loading state.

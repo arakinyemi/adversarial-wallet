@@ -22,6 +22,7 @@ import type { Intent } from "../App";
 import { ErrorBanner, TopBar, errorMessage } from "./components";
 import { fetchUsdPrices, type UsdPrices } from "../prices";
 import { formatSats, satsToBtc, satsToUsd, truncateMiddle } from "./format";
+import { PullToRefresh } from "./PullToRefresh";
 import { QrCode } from "./QrCode";
 import { getSessionPin } from "./session-lock";
 import { BTC_ENTROPY_KEY } from "./SetupFlow";
@@ -334,6 +335,7 @@ export function BitcoinScreen({
   }
 
   return (
+    <PullToRefresh onRefresh={refresh}>
     <div className="screen">
       <TopBar title="Spending · Bitcoin" onBack={onHome} />
       <ErrorBanner error={error} />
@@ -368,5 +370,6 @@ export function BitcoinScreen({
         {busy ? "refreshing…" : "refresh"}
       </button>
     </div>
+    </PullToRefresh>
   );
 }

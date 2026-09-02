@@ -17,6 +17,7 @@ import type { Intent } from "../App";
 import { ErrorBanner, TopBar, errorMessage } from "./components";
 import { fetchUsdPrices, type UsdPrices } from "../prices";
 import { msatToSats, satsToUsd } from "./format";
+import { PullToRefresh } from "./PullToRefresh";
 import { QrCode } from "./QrCode";
 import { getSessionPin } from "./session-lock";
 import { saveConfig, type WalletConfig } from "./wallet-config";
@@ -242,6 +243,7 @@ export function LightningScreen({
   }
 
   return (
+    <PullToRefresh onRefresh={refresh}>
     <div className="screen">
       <TopBar title="Instant · Lightning" onBack={onHome} />
       <ErrorBanner error={error} />
@@ -293,5 +295,6 @@ export function LightningScreen({
         )
       )}
     </div>
+    </PullToRefresh>
   );
 }

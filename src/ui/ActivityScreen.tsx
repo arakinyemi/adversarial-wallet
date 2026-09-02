@@ -2,12 +2,13 @@
 // first. Honest per source — a failed source says so rather than showing
 // an empty feed as if nothing happened.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchRecentTransactions, scanWatchOnlyBalance } from "../btc";
 import { listPayments } from "../lightning";
 import { fetchUsdPrices, type UsdPrices } from "../prices";
 import type { Route } from "../App";
 import { BottomNav } from "./BottomNav";
+import { PullToRefresh } from "./PullToRefresh";
 import { formatSats, msatToSats, satsToUsd, truncateMiddle } from "./format";
 import type { WalletConfig } from "./wallet-config";
 
@@ -32,60 +33,61 @@ export function ActivityScreen({
   const [lnFailed, setLnFailed] = useState(false);
   const [prices, setPrices] = useState<UsdPrices | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    void fetchUsdPrices().then((usd) => { if (alive) setPrices(usd); }).catch(() => {});
-
-    const load = async () => {
-      const collected: Item[] = [];
-      try {
-        const balance = await scanWatchOnlyBalance({
-          esploraUrl: config.esploraUrl,
-          xpub: config.xpub,
-          network: config.network,
+  const load = useCallback(async () => {
+    void fetchUsdPrices().then(setPrices).catch(() => {});
+    setBtcFailed(false);
+    setLnFailed(false);
+    const collected: Item[] = [];
+    try {
+      const balance = await scanWatchOnlyBalance({
+        esploraUrl: config.esploraUrl,
+        xpub: config.xpub,
+        network: config.network,
+      });
+      const txs = await fetchRecentTransactions(config.esploraUrl, balance.usedAddresses);
+      for (const tx of txs) {
+        collected.push({
+          kind: "bitcoin",
+          label: tx.netSats >= 0 ? "Received bitcoin" : "Sent bitcoin",
+          detail: truncateMiddle(tx.txid, 8),
+          sats: tx.netSats,
+          pending: !tx.confirmed,
+          time: tx.time ?? Math.floor(Date.now() / 1000),
         });
-        const txs = await fetchRecentTransactions(config.esploraUrl, balance.usedAddresses);
-        for (const tx of txs) {
+      }
+    } catch {
+      setBtcFailed(true);
+    }
+    if (config.lnbitsUrl !== "" && config.lnbitsInvoiceKey !== "") {
+      try {
+        const payments = await listPayments({ baseUrl: config.lnbitsUrl, apiKey: config.lnbitsInvoiceKey });
+        for (const p of payments) {
           collected.push({
-            kind: "bitcoin",
-            label: tx.netSats >= 0 ? "Received bitcoin" : "Sent bitcoin",
-            detail: truncateMiddle(tx.txid, 8),
-            sats: tx.netSats,
-            pending: !tx.confirmed,
-            time: tx.time ?? Math.floor(Date.now() / 1000),
+            kind: "lightning",
+            label: p.amountMsat >= 0 ? "Received instantly" : "Paid instantly",
+            detail: p.memo !== "" ? p.memo : "Lightning",
+            sats: msatToSats(p.amountMsat),
+            pending: p.pending,
+            time: p.time,
           });
         }
       } catch {
-        if (alive) setBtcFailed(true);
+        setLnFailed(true);
       }
-      if (config.lnbitsUrl !== "" && config.lnbitsInvoiceKey !== "") {
-        try {
-          const payments = await listPayments({ baseUrl: config.lnbitsUrl, apiKey: config.lnbitsInvoiceKey });
-          for (const p of payments) {
-            collected.push({
-              kind: "lightning",
-              label: p.amountMsat >= 0 ? "Received instantly" : "Paid instantly",
-              detail: p.memo !== "" ? p.memo : "Lightning",
-              sats: msatToSats(p.amountMsat),
-              pending: p.pending,
-              time: p.time,
-            });
-          }
-        } catch {
-          if (alive) setLnFailed(true);
-        }
-      }
-      collected.sort((a, b) => Number(a.pending) - Number(b.pending) === 0 ? b.time - a.time : Number(b.pending) - Number(a.pending));
-      if (alive) setItems(collected);
-    };
-    void load();
-    return () => { alive = false; };
+    }
+    collected.sort((a, b) => Number(a.pending) - Number(b.pending) === 0 ? b.time - a.time : Number(b.pending) - Number(a.pending));
+    setItems(collected);
   }, [config]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const dateOf = (t: number) =>
     new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
   return (
+    <PullToRefresh onRefresh={load}>
     <div className="screen with-nav">
       <div className="micro dim">Activity</div>
       <div className="h1" style={{ marginTop: 10, fontSize: 24 }}>What's happened</div>
@@ -121,5 +123,6 @@ export function ActivityScreen({
       </div>
       <BottomNav at="activity" go={go} />
     </div>
+    </PullToRefresh>
   );
 }
