@@ -18,6 +18,7 @@ import {
   type WatchOnlyBalance,
 } from "../btc";
 import { openSecret, type KeyValueBackend } from "../storage";
+import type { Intent } from "../App";
 import { ErrorBanner, TopBar, errorMessage } from "./components";
 import { fetchUsdPrices, type UsdPrices } from "../prices";
 import { formatSats, satsToBtc, satsToUsd, truncateMiddle } from "./format";
@@ -42,13 +43,17 @@ interface PreparedSpend {
 export function BitcoinScreen({
   backend,
   config,
+  initialIntent,
   onHome,
 }: {
   backend: KeyValueBackend;
   config: WalletConfig;
+  initialIntent?: Intent | null;
   onHome: () => void;
 }) {
-  const [view, setView] = useState<View>("main");
+  const [view, setView] = useState<View>(
+    initialIntent === "send" ? "send" : initialIntent === "receive" ? "receive" : "main",
+  );
   const [balance, setBalance] = useState<WatchOnlyBalance | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

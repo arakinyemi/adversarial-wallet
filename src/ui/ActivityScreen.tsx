@@ -7,7 +7,7 @@ import { fetchRecentTransactions, scanWatchOnlyBalance } from "../btc";
 import { listPayments } from "../lightning";
 import { fetchUsdPrices, type UsdPrices } from "../prices";
 import type { Route } from "../App";
-import { FloatingNav } from "./FloatingNav";
+import { BottomNav } from "./BottomNav";
 import { formatSats, msatToSats, satsToUsd, truncateMiddle } from "./format";
 import type { WalletConfig } from "./wallet-config";
 
@@ -119,7 +119,7 @@ export function ActivityScreen({
           ))
         )}
       </div>
-      <FloatingNav at="activity" go={go} />
+      <BottomNav at="activity" go={go} />
     </div>
   );
 }

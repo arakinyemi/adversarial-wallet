@@ -347,40 +347,80 @@ input::placeholder, textarea::placeholder { color: var(--faint); font-family: va
 
 /* --- floating nav --- */
 .fnav {
+  z-index: 10;
   position: fixed;
   left: 50%;
-  bottom: calc(18px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
+  width: 100%;
+  max-width: 428px;
+  box-sizing: border-box;
+  bottom: 0;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
-  backdrop-filter: blur(14px);
-  border: 1px solid var(--border);
-  border-radius: 2px;
+  padding: 6px 10px calc(10px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-top: 1px solid var(--hairline);
 }
 .fnav button {
-  width: 56px;
-  height: 44px;
+  flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+  height: 52px;
   background: none;
   border: none;
   border-radius: 2px;
   color: var(--faint);
+  font: 600 10px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
 }
-.fnav button.on { color: var(--text); background: var(--surface-2); }
-.fnav button.center {
-  width: 60px;
-  height: 48px;
-  background: var(--accent);
-  color: var(--accent-ink);
+.fnav button.on { color: var(--accent); }
+.screen.with-nav { padding-bottom: 96px; }
+.screen.with-actions { padding-bottom: 172px; }
+
+/* --- send/receive docked above the nav --- */
+.dock-actions {
+  z-index: 10;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 428px;
+  box-sizing: border-box;
+  bottom: calc(70px + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 10px;
+  padding: 12px 22px;
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
 }
-.fnav button.center.on { background: var(--accent); color: var(--accent-ink); }
-.screen.with-nav { padding-bottom: 110px; }
+.dock-actions .btn { flex: 1; }
+
+/* --- bottom sheet chooser --- */
+.sheet-back {
+  z-index: 20;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.sheet {
+  z-index: 21;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 428px;
+  box-sizing: border-box;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 18px 22px calc(22px + env(safe-area-inset-bottom));
+}
 
 /* --- segmented control --- */
 .seg {

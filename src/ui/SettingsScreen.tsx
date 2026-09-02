@@ -7,7 +7,7 @@ import type { KeyValueBackend } from "../storage";
 import type { Route } from "../App";
 import { biometricAvailable, disableBiometricUnlock, enableBiometricUnlock } from "./biometric";
 import { Card, ErrorBanner, errorMessage } from "./components";
-import { FloatingNav } from "./FloatingNav";
+import { BottomNav } from "./BottomNav";
 import { getSessionPin, lock } from "./session-lock";
 import { saveConfig, type WalletConfig } from "./wallet-config";
 
@@ -108,7 +108,7 @@ export function SettingsScreen({
       <div className="faint" style={{ marginTop: 4 }}>
         This wallet lives on {config.network === "mainnet" ? "the real Bitcoin network" : "the test network"}.
       </div>
-      <FloatingNav at="settings" go={go} />
+      <BottomNav at="settings" go={go} />
     </div>
   );
 }

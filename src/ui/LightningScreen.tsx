@@ -13,6 +13,7 @@ import {
 } from "../lightning";
 import { LNBITS_INSTANCE_URL } from "../lightning/instance";
 import { hasSecret, openSecret, sealSecret, type KeyValueBackend } from "../storage";
+import type { Intent } from "../App";
 import { ErrorBanner, TopBar, errorMessage } from "./components";
 import { fetchUsdPrices, type UsdPrices } from "../prices";
 import { msatToSats, satsToUsd } from "./format";
@@ -27,15 +28,23 @@ type View = "main" | "request" | "pay" | "paid";
 export function LightningScreen({
   backend,
   config,
+  initialIntent,
   onConfigChange,
   onHome,
 }: {
   backend: KeyValueBackend;
   config: WalletConfig;
+  initialIntent?: Intent | null;
   onConfigChange: (next: WalletConfig) => void;
   onHome: () => void;
 }) {
-  const [view, setView] = useState<View>("main");
+  // Jump straight to pay/request only when the account already exists —
+  // an unconfigured account must land on the main view's setup path.
+  const [view, setView] = useState<View>(
+    config.lnbitsUrl !== "" && config.lnbitsInvoiceKey !== ""
+      ? initialIntent === "send" ? "pay" : initialIntent === "receive" ? "request" : "main"
+      : "main",
+  );
   const [balanceMsat, setBalanceMsat] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

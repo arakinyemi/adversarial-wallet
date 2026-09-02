@@ -6,11 +6,11 @@
 import { useEffect, useState } from "react";
 import { createPublicClient, formatEther, getAddress, http } from "viem";
 import { base, baseSepolia } from "viem/chains";
-import type { Route } from "../App";
+import type { Intent, Route } from "../App";
 import { scanWatchOnlyBalance } from "../btc";
 import { getBalanceMsat } from "../lightning";
 import { fetchUsdPrices, type UsdPrices } from "../prices";
-import { FloatingNav } from "./FloatingNav";
+import { BottomNav } from "./BottomNav";
 import { formatSats, msatToSats, satsToBtc, satsToUsd } from "./format";
 import type { WalletConfig } from "./wallet-config";
 
@@ -21,8 +21,10 @@ export function HomeScreen({
   go,
 }: {
   config: WalletConfig;
-  go: (r: Route) => void;
+  go: (r: Route, intent?: Intent) => void;
 }) {
+  // Send/Receive need an account: the chooser picks Bitcoin or Lightning.
+  const [chooser, setChooser] = useState<Intent | null>(null);
   const [btc, setBtc] = useState<Load>({ state: "loading" });
   const [ln, setLn] = useState<Load>(
     config.lnbitsUrl !== "" && config.lnbitsInvoiceKey !== "" ? { state: "loading" } : { state: "off" },
@@ -84,7 +86,7 @@ export function HomeScreen({
       : null;
 
   return (
-    <div className="screen with-nav">
+    <div className="screen with-nav with-actions">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div className="brandrow">
           <span className="sq" />
@@ -136,7 +138,34 @@ export function HomeScreen({
         </button>
       </div>
       <div className="grow" />
-      <FloatingNav at="home" go={go} />
+      <div className="dock-actions">
+        <button className="btn primary" onClick={() => setChooser("send")}>Send</button>
+        <button className="btn ghost" onClick={() => setChooser("receive")}>Receive</button>
+      </div>
+      {chooser !== null && (
+        <>
+          <button className="sheet-back" aria-label="Close" onClick={() => setChooser(null)} />
+          <div className="sheet">
+            <div className="micro dim">{chooser === "send" ? "Send from" : "Receive to"}</div>
+            <div style={{ marginTop: 6, display: "flex", flexDirection: "column" }}>
+              <button className="acct" onClick={() => go("bitcoin", chooser)}>
+                <span className="r1"><span className="name">Spending</span></span>
+                <span className="sub2">Bitcoin</span>
+              </button>
+              <button
+                className="acct"
+                disabled={ln.state === "off"}
+                style={ln.state === "off" ? { opacity: 0.45 } : undefined}
+                onClick={() => go("lightning", chooser)}
+              >
+                <span className="r1"><span className="name">Instant</span></span>
+                <span className="sub2">Lightning{ln.state === "off" ? " · not set up" : ""}</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+      <BottomNav at="home" go={go} />
     </div>
   );
 }

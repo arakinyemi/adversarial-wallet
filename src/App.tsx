@@ -16,6 +16,8 @@ import { UnlockScreen } from "./ui/UnlockScreen";
 import { loadConfig, saveConfig, type WalletConfig } from "./ui/wallet-config";
 
 export type Route = "home" | "activity" | "bitcoin" | "lightning" | "savings" | "settings";
+/** Jump straight into a screen's send or receive view (home quick actions). */
+export type Intent = "send" | "receive";
 
 const backend: KeyValueBackend = preferencesBackend;
 
@@ -24,6 +26,7 @@ export default function App() {
   const [fatal, setFatal] = useState<string | null>(null);
   const [config, setConfig] = useState<WalletConfig | null>(null);
   const [route, setRoute] = useState<Route>("home");
+  const [intent, setIntent] = useState<Intent | null>(null);
   const [, forceLockState] = useReducer((x: number) => x + 1, 0);
 
   useEffect(() => subscribe(forceLockState), []);
@@ -98,21 +101,25 @@ export default function App() {
     return <UnlockScreen backend={backend} biometricEnabled={config.biometricUnlock} />;
   }
 
-  const home = () => setRoute("home");
+  const go = (r: Route, i?: Intent) => {
+    setIntent(i ?? null);
+    setRoute(r);
+  };
+  const home = () => go("home");
   switch (route) {
     case "bitcoin":
-      return <BitcoinScreen backend={backend} config={config} onHome={home} />;
+      return <BitcoinScreen backend={backend} config={config} initialIntent={intent} onHome={home} />;
     case "lightning":
       return (
-        <LightningScreen backend={backend} config={config} onConfigChange={setConfig} onHome={home} />
+        <LightningScreen backend={backend} config={config} initialIntent={intent} onConfigChange={setConfig} onHome={home} />
       );
     case "savings":
       return <SafeScreen backend={backend} config={config} onConfigChange={setConfig} onHome={home} />;
     case "settings":
-      return <SettingsScreen backend={backend} config={config} onChange={setConfig} go={setRoute} />;
+      return <SettingsScreen backend={backend} config={config} onChange={setConfig} go={go} />;
     case "activity":
-      return <ActivityScreen config={config} go={setRoute} />;
+      return <ActivityScreen config={config} go={go} />;
     default:
-      return <HomeScreen config={config} go={setRoute} />;
+      return <HomeScreen config={config} go={go} />;
   }
 }
