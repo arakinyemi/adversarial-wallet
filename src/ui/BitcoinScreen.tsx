@@ -123,9 +123,14 @@ export function BitcoinScreen({
       const chains: number[] = [];
       const indexes: number[] = [];
       for (const chain of [0, 1]) {
-        for (let i = 0, misses = 0; misses < balance.usedAddresses.length + 20; i++) {
+        // Consecutive-gap walk, matching scanWatchOnlyBalance's GAP_LIMIT
+        // semantics exactly: every address the balance scan counted is
+        // reachable here, so the spendable set always covers the shown
+        // balance. (A total-miss cap would strand coins past sparse gaps.)
+        for (let i = 0, gap = 0; gap < 20; i++) {
           const address = xpub_to_address_js(config.xpub, config.network, chain, i);
-          if (!used.has(address)) { misses++; continue; }
+          if (!used.has(address)) { gap++; continue; }
+          gap = 0;
           for (const utxo of await fetchUtxos(config.esploraUrl, address)) {
             if (!utxo.confirmed) continue;
             txids.push(utxo.txid);

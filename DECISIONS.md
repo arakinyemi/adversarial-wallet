@@ -713,3 +713,11 @@ most of the handover documentation. Newest entries at the bottom.
   indicator is a small square that arms in the accent at the trigger
   distance and spins while loading; old values stay on screen during a
   refresh rather than flashing to a loading state.
+- **Spend-path gap-walk bug found in pre-handover review and fixed:** the
+  UTXO-gathering loop in prepareSpend capped *total* misses at
+  used-count + 20, while the balance scan uses a *consecutive* 20-gap.
+  Sparse used-address layouts (legal under the gap limit) could make a
+  spend silently exclude coins the balance screen counts — no theft path,
+  but funds would be unspendable through the UI. The loop now walks the
+  same consecutive-gap rule as the scanner, so the spendable set always
+  covers the shown balance.
