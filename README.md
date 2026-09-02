@@ -104,7 +104,7 @@ installed app keeps its data across updates only under the same signing key,
 so the challenge build stays on the debug key deliberately.
 
 ```
-SHA-256(Aegis.apk) = 064c0306ac9ba06d103f374f125c5fea94fc047ef87a478e9d03fdee14e93aee
+SHA-256(Aegis.apk) = 7822ab7b9c80041f904fe7051f51180bbb142801404ec3a9046896d1b5c781c5
 ```
 
 ## Running the web build
