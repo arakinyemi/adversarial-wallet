@@ -344,3 +344,87 @@ input::placeholder, textarea::placeholder { color: var(--faint); font-family: va
   margin: 0 auto;
 }
 .qr svg { width: 100%; height: 100%; display: block; }
+
+/* --- floating nav --- */
+.fnav {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+.fnav button {
+  width: 56px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 2px;
+  color: var(--faint);
+  cursor: pointer;
+}
+.fnav button.on { color: var(--text); background: var(--surface-2); }
+.fnav button.center {
+  width: 60px;
+  height: 48px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.fnav button.center.on { background: var(--accent); color: var(--accent-ink); }
+.screen.with-nav { padding-bottom: 110px; }
+
+/* --- segmented control --- */
+.seg {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.seg button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  background: none;
+  border: none;
+  color: var(--faint);
+  font: 600 13px var(--font);
+  cursor: pointer;
+}
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+
+/* --- activity rows --- */
+.act-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.act-row .ic {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--muted);
+}
+.act-row .mid { flex: 1; min-width: 0; }
+.act-row .l1 { font: 600 14px var(--font); }
+.act-row .l2 { font: 400 11.5px var(--mono); color: var(--faint); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.act-row .amt { font: 600 14px var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.act-row .amt.in { color: var(--accent); }

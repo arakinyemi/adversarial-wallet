@@ -3,6 +3,7 @@ import wasmUrl from "../core/pkg/adversarial_core_bg.wasm?url";
 import { initEntropyCore } from "./entropy";
 import type { KeyValueBackend } from "./storage";
 import { preferencesBackend } from "./storage/preferences-backend";
+import { ActivityScreen } from "./ui/ActivityScreen";
 import { BitcoinScreen } from "./ui/BitcoinScreen";
 import { errorMessage } from "./ui/components";
 import { HomeScreen } from "./ui/HomeScreen";
@@ -14,7 +15,7 @@ import { SetupFlow } from "./ui/SetupFlow";
 import { UnlockScreen } from "./ui/UnlockScreen";
 import { loadConfig, saveConfig, type WalletConfig } from "./ui/wallet-config";
 
-export type Route = "home" | "bitcoin" | "lightning" | "savings" | "settings";
+export type Route = "home" | "activity" | "bitcoin" | "lightning" | "savings" | "settings";
 
 const backend: KeyValueBackend = preferencesBackend;
 
@@ -106,9 +107,11 @@ export default function App() {
         <LightningScreen backend={backend} config={config} onConfigChange={setConfig} onHome={home} />
       );
     case "savings":
-      return <SafeScreen backend={backend} config={config} onHome={home} />;
+      return <SafeScreen backend={backend} config={config} onConfigChange={setConfig} onHome={home} />;
     case "settings":
-      return <SettingsScreen backend={backend} config={config} onChange={setConfig} onHome={home} />;
+      return <SettingsScreen backend={backend} config={config} onChange={setConfig} go={setRoute} />;
+    case "activity":
+      return <ActivityScreen config={config} go={setRoute} />;
     default:
       return <HomeScreen config={config} go={setRoute} />;
   }

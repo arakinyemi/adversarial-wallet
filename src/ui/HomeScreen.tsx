@@ -10,6 +10,7 @@ import type { Route } from "../App";
 import { scanWatchOnlyBalance } from "../btc";
 import { getBalanceMsat } from "../lightning";
 import { fetchUsdPrices, type UsdPrices } from "../prices";
+import { FloatingNav } from "./FloatingNav";
 import { formatSats, msatToSats, satsToBtc, satsToUsd } from "./format";
 import type { WalletConfig } from "./wallet-config";
 
@@ -83,18 +84,15 @@ export function HomeScreen({
       : null;
 
   return (
-    <div className="screen">
+    <div className="screen with-nav">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div className="brandrow">
           <span className="sq" />
           <span className="nm">Aegis</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {config.network === "testnet" && (
-            <span className="micro" style={{ color: "var(--amber)" }}>test mode</span>
-          )}
-          <button className="gear" onClick={() => go("settings")} aria-label="Settings">⚙</button>
-        </div>
+        {config.network === "testnet" && (
+          <span className="micro" style={{ color: "var(--amber)" }}>test mode</span>
+        )}
       </div>
 
       <div style={{ marginTop: 26 }}>
@@ -138,6 +136,7 @@ export function HomeScreen({
         </button>
       </div>
       <div className="grow" />
+      <FloatingNav at="home" go={go} />
     </div>
   );
 }
