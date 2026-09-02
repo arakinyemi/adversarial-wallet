@@ -6,3 +6,9 @@ dist/
 core/pkg/
 core/target/
 .gstack/
+
+# Local secrets — env keys for scripts, signing keystores. Never committed.
+.env
+.env.*
+*.keystore
+*.jks

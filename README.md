@@ -3,7 +3,7 @@
 A self-custody wallet for Android supporting three networks:
 
 - **Bitcoin** on-chain (BIP39/BIP84, native segwit)
-- **Lightning**, through a self-hosted [LNbits](https://lnbits.com) instance
+- **Lightning**, through an [LNbits](https://lnbits.com) instance
 - **ETH on Base**, held in a [Safe](https://safe.global) smart account with
   three owners and a threshold of two
 
@@ -19,17 +19,21 @@ never written to storage. Day to day the app is watch-only, deriving
 addresses from the account xpub. Spending derives the keys in memory for one
 signature and discards them.
 
-**Seed generation** combines two entropy sources — the platform CSPRNG
-(`crypto.getRandomValues`) and at least 50 user-entered physical dice rolls —
-and aborts visibly if either source fails. See [ENTROPY.md](ENTROPY.md).
+**Seed generation** has two user-chosen tiers: quick (platform CSPRNG,
+`crypto.getRandomValues`) and advanced, which XORs the CSPRNG output with
+SHA-256 of at least 50 user-entered physical dice rolls. Each tier fails
+closed — a source that throws, returns short, or fails its health check
+aborts generation with a visible error, with no fallback between tiers.
+See [ENTROPY.md](ENTROPY.md).
 
 **Base.** The Safe contract requires signatures from two of its three owner
-keys for every transaction. One key lives on this device (generated with its
-own dice ceremony), one on a second device, one on paper. Sending is a
+keys for every transaction. One key lives on this device (generated
+independently of the Bitcoin seed), one on a second device, one on paper. Sending is a
 two-device flow: one device signs and exports a proposal payload, the other
 countersigns and executes.
 
-**Lightning.** A wallet on the user's own LNbits instance. The invoice
+**Lightning.** A wallet the app provisions for itself on its built-in
+LNbits instance. The invoice
 (read) key is stored as configuration; the admin (pay) key is stored
 encrypted and unlocked per payment. Settled payments are accepted only when
 the preimage verifiably hashes to the payment hash.
@@ -89,9 +93,19 @@ npx cap sync android
 cd android && ./gradlew assembleRelease
 ```
 
-The release APK is unsigned; releases are signed at publication and the APK
-SHA-256 is published alongside. Debug builds (`assembleDebug`) install
-directly for development.
+Debug builds (`assembleDebug`) install directly for development.
+
+## The challenge build
+
+The APK handed over with the challenge device was built via `assembleDebug`
+from the application source at the commit tagged `handover` (documentation
+commits may postdate the build; the app source is identical). The device's
+installed app keeps its data across updates only under the same signing key,
+so the challenge build stays on the debug key deliberately.
+
+```
+SHA-256(Aegis.apk) = 064c0306ac9ba06d103f374f125c5fea94fc047ef87a478e9d03fdee14e93aee
+```
 
 ## Running the web build
 
@@ -101,9 +115,14 @@ bundle.
 
 ## Configuration
 
-In-app Settings: network (`testnet`/`mainnet`, which also selects Base
-Sepolia/Base), Esplora endpoint, LNbits URL and invoice key, Safe address
-and expected owner set. Secrets never appear in Settings.
+There is deliberately almost none. The network (`mainnet`/`testnet`, which
+also selects Base/Base Sepolia) is chosen once at wallet creation and is
+immutable for the life of the wallet; chain endpoints are built in; the
+Lightning account provisions itself on first visit; the Safe is linked by
+pasting its address, after which the app reads the owner set from the chain
+and refuses to link unless this device's key is among the owners. Settings
+hold only appearance and security options. Secrets never appear anywhere in
+the UI.
 
 ## Operator scripts
 
