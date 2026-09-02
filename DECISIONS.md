@@ -699,3 +699,11 @@ most of the handover documentation. Newest entries at the bottom.
   tsc/lint/build clean; full ceremony walked again in browser, then nav,
   activity (empty state), settings (instant toggle), and the link-account
   screen all observed rendering. Test wallet wiped.
+- **Amended same session:** the floating nav pill became a standard
+  full-width bottom bar with labeled tabs (activity · home · settings);
+  the active tab is highlighted rather than home being permanently lime.
+  Send and Receive are docked above the bar on home; each opens a chooser
+  (Spending / Instant) and jumps straight into that account's send or
+  receive view — Lightning only when it is already set up, otherwise the
+  chooser row is disabled and the main view's self-provisioning path
+  stays the entry. FloatingNav renamed BottomNav to match reality.
