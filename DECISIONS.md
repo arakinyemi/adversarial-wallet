@@ -666,3 +666,36 @@ most of the handover documentation. Newest entries at the bottom.
   passphrase hold-to-commit, ready, home, and a live testnet scan on the
   Spending screen. The inactivity auto-lock fired mid-walkthrough and the
   keypad unlock recovered it — observed working. Test wallet wiped.
+
+## Session 25 — floating nav, activity feed, settings simplified, guided savings linking (2026-09-02)
+
+- **Floating bottom nav** (activity · home · settings) on the three
+  top-level screens only; sub-flows keep back arrows. Home is the fixed
+  lime center button — the anchor gesture — rather than a fourth equal
+  tab. The settings glyph is sliders, not a gear: the gear's spokes read
+  as a sun next to the theme toggle.
+- **Activity screen** merges Bitcoin transactions and Lightning payments,
+  pending first then newest. Per-source failure banners instead of one
+  global error — a dead Lightning endpoint shouldn't hide Bitcoin
+  history, and an empty feed must never masquerade as "nothing happened".
+  Net Bitcoin amounts computed client-side from esplora tx vin/vout
+  against our own address set (`fetchRecentTransactions`), deduped by
+  txid; no new API surface.
+- **Settings stripped to appearance + security.** Theme is an instant
+  segmented sun/moon toggle that applies and persists on tap — the Save
+  button is gone. The savings address/owner textareas are gone too
+  (below). Network remains a one-line statement, not a control.
+- **Savings linking is a guided flow, not form fields.** When the phone
+  has a signing key but no linked account, the Savings tab asks for one
+  address, reads the three owners and threshold from the chain
+  (`readSafeConfig` — same structural validation as deployment
+  verification, no expected-owner set), refuses if this phone's key is
+  not among the owners, then shows "This phone ✓ / Second key / Third
+  key · 2 of 3" for confirmation before anything is saved. Owners are
+  stored this-phone-first so display order is meaningful. The user never
+  types an owner list; the chain is the source of truth.
+- **Verified:** 112 tests green (new: fetchRecentTransactions signed
+  net/dedupe/sort/refusals, listPayments validation, readSafeConfig),
+  tsc/lint/build clean; full ceremony walked again in browser, then nav,
+  activity (empty state), settings (instant toggle), and the link-account
+  screen all observed rendering. Test wallet wiped.
