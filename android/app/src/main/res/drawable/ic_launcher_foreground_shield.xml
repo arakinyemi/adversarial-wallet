@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Aegis shield, centered in the adaptive-icon safe zone -->
+    <path
+        android:pathData="M54,32 L75,39.5 L75,53 C75,65.5 66.5,73.8 54,77.5 C41.5,73.8 33,65.5 33,53 L33,39.5 Z"
+        android:strokeColor="#A6F13C"
+        android:strokeWidth="4.2"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"/>
+</vector>

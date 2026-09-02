@@ -11,6 +11,7 @@ import { scanWatchOnlyBalance } from "../btc";
 import { getBalanceMsat } from "../lightning";
 import { fetchUsdPrices, type UsdPrices } from "../prices";
 import { BottomNav } from "./BottomNav";
+import { ShieldMark } from "./ShieldMark";
 import { PullToRefresh } from "./PullToRefresh";
 import { formatSats, msatToSats, satsToBtc, satsToUsd } from "./format";
 import type { WalletConfig } from "./wallet-config";
@@ -96,7 +97,7 @@ export function HomeScreen({
     <div className="screen with-nav with-actions">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div className="brandrow">
-          <span className="sq" />
+          <ShieldMark size={15} />
           <span className="nm">Aegis</span>
         </div>
         {config.network === "testnet" && (

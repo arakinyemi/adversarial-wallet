@@ -11,6 +11,7 @@
 //   code paths with no fallback between them.
 
 import { useState } from "react";
+import { ShieldMark } from "./ShieldMark";
 import {
   account_xpub_js,
   entropy_to_mnemonic_js,
@@ -251,7 +252,7 @@ export function SetupFlow({
       {screen === "welcome" && (
         <>
           <div className="grow center" style={{ gap: 18 }}>
-            <div className="mark" />
+            <ShieldMark size={34} />
             <div style={{ font: "600 40px/1.05 var(--font)", letterSpacing: "-0.02em" }}>Aegis</div>
             <div className="sub" style={{ maxWidth: 300 }}>
               A self-custody wallet. Your keys never leave this phone.

@@ -6,6 +6,7 @@
 // as fallback.
 
 import { useEffect, useRef, useState } from "react";
+import { ShieldMark } from "./ShieldMark";
 import { openSecret, type KeyValueBackend } from "../storage";
 import { biometricUnlock } from "./biometric";
 import { errorMessage } from "./components";
@@ -67,7 +68,7 @@ export function UnlockScreen({
   return (
     <div className="screen">
       <div className="grow center" style={{ alignItems: "center", textAlign: "center" }}>
-        <div className="mark" />
+        <ShieldMark size={30} />
         <div className="h1">Aegis</div>
         <div className="sub">{busy ? "Checking…" : "Enter your PIN"}</div>
         {error !== null && (
