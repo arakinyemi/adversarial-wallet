@@ -34,6 +34,7 @@ import { PinPad } from "./PinPad";
 import { unlock } from "./session-lock";
 import { saveConfig, type WalletConfig } from "./wallet-config";
 import { assessPassphrase } from "./passphrase-strength";
+import { PassphraseMeter } from "./PassphraseMeter";
 
 export const BTC_ENTROPY_KEY = "wallet.btc-entropy.v1";
 
@@ -463,39 +464,7 @@ export function SetupFlow({
               <div className="mono" style={{ fontSize: 11.5, color: passMatch ? "var(--success)" : "var(--faint)" }}>
                 {p1 === "" && p2 === "" ? " " : passMatch ? "They match." : "Not matching yet."}
               </div>
-              {path === "create" && p1 !== "" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    {[0, 1, 2, 3].map((i) => (
-                      <span
-                        key={i}
-                        style={{
-                          flex: 1,
-                          height: 4,
-                          borderRadius: 2,
-                          background:
-                            i < passStrength.score
-                              ? passStrength.score >= 3
-                                ? "var(--success)"
-                                : passStrength.acceptable
-                                  ? "var(--accent)"
-                                  : "var(--amber)"
-                              : "var(--faint)",
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <div
-                    className="mono"
-                    style={{
-                      fontSize: 11.5,
-                      color: passStrength.acceptable ? "var(--success)" : "var(--amber)",
-                    }}
-                  >
-                    {passStrength.reason ?? `Strength: ${passStrength.label}`}
-                  </div>
-                </div>
-              )}
+              {path === "create" && <PassphraseMeter assessment={passStrength} />}
             </div>
             <button className="ackbox" onClick={() => setAck(!ack)}>
               <span className="box">{ack ? "✓" : ""}</span>

@@ -11,9 +11,10 @@ import {
 } from "../../core/pkg/adversarial_core";
 import {
   broadcastTransaction,
+  collectSpendableInputs,
+  DUST_SATS,
   estimateFeeSats,
   fetchFeeRate,
-  fetchUtxos,
   scanWatchOnlyBalance,
   type WatchOnlyBalance,
 } from "../btc";
@@ -116,32 +117,8 @@ export function BitcoinScreen({
     setBusy(true);
     try {
       const used = new Set(balance.usedAddresses);
-      const txids: string[] = [];
-      const addresses: string[] = [];
-      const vouts: number[] = [];
-      const values: bigint[] = [];
-      const chains: number[] = [];
-      const indexes: number[] = [];
-      for (const chain of [0, 1]) {
-        // Consecutive-gap walk, matching scanWatchOnlyBalance's GAP_LIMIT
-        // semantics exactly: every address the balance scan counted is
-        // reachable here, so the spendable set always covers the shown
-        // balance. (A total-miss cap would strand coins past sparse gaps.)
-        for (let i = 0, gap = 0; gap < 20; i++) {
-          const address = xpub_to_address_js(config.xpub, config.network, chain, i);
-          if (!used.has(address)) { gap++; continue; }
-          gap = 0;
-          for (const utxo of await fetchUtxos(config.esploraUrl, address)) {
-            if (!utxo.confirmed) continue;
-            txids.push(utxo.txid);
-            addresses.push(address);
-            vouts.push(utxo.vout);
-            values.push(BigInt(utxo.valueSats));
-            chains.push(chain);
-            indexes.push(i);
-          }
-        }
-      }
+      const { txids, addresses, vouts, values, chains, indexes } =
+        await collectSpendableInputs(config.esploraUrl, config.xpub, config.network, balance.usedAddresses);
       if (txids.length === 0) throw new Error("No confirmed coins to spend yet.");
 
       const rate = await fetchFeeRate(config.esploraUrl);
@@ -158,7 +135,7 @@ export function BitcoinScreen({
       // A change output below dust cannot exist; fold the remainder into the
       // fee EXPLICITLY — the confirm screen shows the final number.
       const change = total - BigInt(amountSats) - BigInt(feeSats);
-      if (change > 0n && change < 546n) feeSats += Number(change);
+      if (change > 0n && change < BigInt(DUST_SATS)) feeSats += Number(change);
 
       let changeIndex = 0;
       while (used.has(xpub_to_address_js(config.xpub, config.network, 1, changeIndex))) {
