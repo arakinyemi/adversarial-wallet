@@ -33,6 +33,7 @@ import { HoldButton } from "./HoldButton";
 import { PinPad } from "./PinPad";
 import { unlock } from "./session-lock";
 import { saveConfig, type WalletConfig } from "./wallet-config";
+import { assessPassphrase } from "./passphrase-strength";
 
 export const BTC_ENTROPY_KEY = "wallet.btc-entropy.v1";
 
@@ -242,7 +243,12 @@ export function SetupFlow({
 
   const restoreWordCount = restoreText.trim() === "" ? 0 : restoreText.trim().split(/\s+/).length;
   const passMatch = p1 !== "" && p1 === p2;
-  const canCommit = passMatch && ack && !busy;
+  // Strength is enforced only when CREATING a wallet. On restore the passphrase
+  // already exists and must be accepted exactly as typed, or a user is locked
+  // out of a wallet whose passphrase predates (or simply fails) this policy.
+  const passStrength = assessPassphrase(p1);
+  const strengthOk = path === "restore" || passStrength.acceptable;
+  const canCommit = passMatch && ack && !busy && strengthOk;
 
   return (
     <div className={`screen${screen === "pass" ? " deep" : ""}`}>
@@ -457,6 +463,39 @@ export function SetupFlow({
               <div className="mono" style={{ fontSize: 11.5, color: passMatch ? "var(--success)" : "var(--faint)" }}>
                 {p1 === "" && p2 === "" ? " " : passMatch ? "They match." : "Not matching yet."}
               </div>
+              {path === "create" && p1 !== "" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {[0, 1, 2, 3].map((i) => (
+                      <span
+                        key={i}
+                        style={{
+                          flex: 1,
+                          height: 4,
+                          borderRadius: 2,
+                          background:
+                            i < passStrength.score
+                              ? passStrength.score >= 3
+                                ? "var(--success)"
+                                : passStrength.acceptable
+                                  ? "var(--accent)"
+                                  : "var(--amber)"
+                              : "var(--faint)",
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 11.5,
+                      color: passStrength.acceptable ? "var(--success)" : "var(--amber)",
+                    }}
+                  >
+                    {passStrength.reason ?? `Strength: ${passStrength.label}`}
+                  </div>
+                </div>
+              )}
             </div>
             <button className="ackbox" onClick={() => setAck(!ack)}>
               <span className="box">{ack ? "✓" : ""}</span>
