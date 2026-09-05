@@ -5,6 +5,7 @@ import type { KeyValueBackend } from "./storage";
 import { preferencesBackend } from "./storage/preferences-backend";
 import { ActivityScreen } from "./ui/ActivityScreen";
 import { BitcoinScreen } from "./ui/BitcoinScreen";
+import { ChangePassphraseScreen } from "./ui/ChangePassphraseScreen";
 import { errorMessage } from "./ui/components";
 import { HomeScreen } from "./ui/HomeScreen";
 import { LightningScreen } from "./ui/LightningScreen";
@@ -15,7 +16,9 @@ import { SetupFlow } from "./ui/SetupFlow";
 import { UnlockScreen } from "./ui/UnlockScreen";
 import { loadConfig, saveConfig, type WalletConfig } from "./ui/wallet-config";
 
-export type Route = "home" | "activity" | "bitcoin" | "lightning" | "savings" | "settings";
+export type Route =
+  | "home" | "activity" | "bitcoin" | "lightning" | "savings" | "settings"
+  | "change-passphrase";
 /** Jump straight into a screen's send or receive view (home quick actions). */
 export type Intent = "send" | "receive";
 
@@ -117,6 +120,8 @@ export default function App() {
       return <SafeScreen backend={backend} config={config} onConfigChange={setConfig} onHome={home} />;
     case "settings":
       return <SettingsScreen backend={backend} config={config} onChange={setConfig} go={go} />;
+    case "change-passphrase":
+      return <ChangePassphraseScreen backend={backend} config={config} onConfigChange={setConfig} onHome={home} />;
     case "activity":
       return <ActivityScreen config={config} go={go} />;
     default:

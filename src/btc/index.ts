@@ -225,6 +225,75 @@ export async function fetchFeeRate(
   return rate;
 }
 
+/** Conservative dust threshold in sats. Mirrors DUST_SATS in the Rust core;
+ * an output below this is refused there, so callers size outputs above it. */
+export const DUST_SATS = 546;
+
+/** Every confirmed, spendable coin of the wallet, with the derivation
+ * coordinates the signer needs to reproduce each input's key. */
+export interface SpendableInputs {
+  txids: string[];
+  addresses: string[];
+  vouts: number[];
+  values: bigint[];
+  chains: number[];
+  indexes: number[];
+}
+
+/** Walk both chains with the same consecutive-gap semantics as
+ * scanWatchOnlyBalance and gather every CONFIRMED utxo. Addresses are
+ * derived locally from the xpub — never taken from the endpoint — which is
+ * what lets the Rust signer's address interlock reject foreign inputs.
+ * Shared by the ordinary send and the passphrase-rotation sweep so the two
+ * can never disagree about what is spendable. Fail-closed: any endpoint
+ * failure throws. */
+export async function collectSpendableInputs(
+  esploraUrl: string,
+  xpub: string,
+  network: "mainnet" | "testnet",
+  usedAddresses: readonly string[],
+  fetchFn: FetchLike = defaultGet,
+): Promise<SpendableInputs> {
+  const used = new Set(usedAddresses);
+  const out: SpendableInputs = {
+    txids: [], addresses: [], vouts: [], values: [], chains: [], indexes: [],
+  };
+  for (const chain of [0, 1]) {
+    for (let i = 0, gap = 0; gap < GAP_LIMIT; i++) {
+      const address = xpub_to_address_js(xpub, network, chain, i);
+      if (!used.has(address)) { gap++; continue; }
+      gap = 0;
+      for (const utxo of await fetchUtxos(esploraUrl, address, fetchFn)) {
+        if (!utxo.confirmed) continue;
+        out.txids.push(utxo.txid);
+        out.addresses.push(address);
+        out.vouts.push(utxo.vout);
+        out.values.push(BigInt(utxo.valueSats));
+        out.chains.push(chain);
+        out.indexes.push(i);
+      }
+    }
+  }
+  return out;
+}
+
+/** Amount for a single-output sweep of every input: total minus fee, with
+ * no change. Refuses when the remainder could not stand as an output. */
+export function computeSweepAmount(values: readonly bigint[], feeSats: number): bigint {
+  if (values.length === 0) {
+    throw new BtcWatchError("No confirmed coins to move yet.");
+  }
+  if (!Number.isSafeInteger(feeSats) || feeSats <= 0) {
+    throw new BtcWatchError("fee must be a positive whole number of sats");
+  }
+  const total = values.reduce((a, v) => a + v, 0n);
+  const amount = total - BigInt(feeSats);
+  if (amount < BigInt(DUST_SATS)) {
+    throw new BtcWatchError("Balance is too small to move after the network fee.");
+  }
+  return amount;
+}
+
 /** Fee for a P2WPKH transaction: vsize ≈ 10.5 + 68·inputs + 31·outputs,
  * rounded up so the estimate never undershoots the rate. */
 export function estimateFeeSats(

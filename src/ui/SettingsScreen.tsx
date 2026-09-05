@@ -92,6 +92,10 @@ export function SettingsScreen({
         <button className="btn ghost small" onClick={() => lock()}>
           Lock now
         </button>
+        <div className="spacer" />
+        <button className="btn ghost small" onClick={() => go("change-passphrase")}>
+          Change spending passphrase
+        </button>
         {bioAvailable && (
           <>
             <div className="spacer" />
